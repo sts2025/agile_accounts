@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Balance Sheet</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h1>Balance Sheet</h1>
+                <p class="text-muted">As of {{ $asOfDate->format('F d, Y') }}</p>
+            </div>
+            <a href="{{ route('admin.dashboard') }}" class="btn btn-secondary">Back to Admin Dashboard</a>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <form method="GET" action="{{ route('admin.reports.balance-sheet') }}" class="row g-3 align-items-center">
+                    <div class="col-auto">
+                        <label for="as_of_date" class="form-label">Show Report as of Date:</label>
+                        <input type="date" class="form-control" id="as_of_date" name="as_of_date" value="{{ $asOfDate->toDateString() }}">
+                    </div>
+                    <div class="col-auto mt-4">
+                        <button type="submit" class="btn btn-primary">Run Report</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-success text-white"><h4>Assets</h4></div>
+                    <div class="card-body">
+                        <table class="table">
+                            <tbody>
+                                @foreach ($assets as $account)
+                                    @if($account->balance != 0)
+                                    <tr>
+                                        <td>{{ $account->name }}</td>
+                                        <td class="text-end">UGX {{ number_format($account->balance, 2) }}</td>
+                                    </tr>
+                                    @endif
+                                @endforeach
+                            </tbody>
+                            <tfoot class="table-group-divider">
+                                <tr class="fw-bold fs-5">
+                                    <td>Total Assets</td>
+                                    <td class="text-end">UGX {{ number_format($totalAssets, 2) }}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-warning"><h4>Liabilities and Equity</h4></div>
+                    <div class="card-body">
+                        <h5>Liabilities</h5>
+                        <table class="table">
+                            <tbody>
+                                @forelse ($liabilities as $account)
+                                    @if($account->balance != 0)
+                                    <tr>
+                                        <td>{{ $account->name }}</td>
+                                        <td class="text-end">UGX {{ number_format($account->balance, 2) }}</td>
+                                    </tr>
+                                    @endif
+                                @empty
+                                    <tr><td>No liabilities recorded.</td><td></td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+
+                        <h5 class="mt-3">Equity</h5>
+                        <table class="table">
+                             <tbody>
+                                @foreach ($equityAccounts as $account)
+                                    @if($account->balance != 0)
+                                    <tr>
+                                        <td>{{ $account->name }}</td>
+                                        <td class="text-end">UGX {{ number_format($account->balance, 2) }}</td>
+                                    </tr>
+                                    @endif
+                                @endforeach
+                                <tr>
+                                    <td>Net Income (Retained Earnings)</td>
+                                    <td class="text-end">UGX {{ number_format($netIncome, 2) }}</td>
+                                </tr>
+                            </tbody>
+                            <tfoot class="table-group-divider">
+                                <tr class="fw-bold fs-5">
+                                    <td>Total Liabilities & Equity</td>
+                                    <td class="text-end">UGX {{ number_format($totalLiabilitiesAndEquity, 2) }}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
