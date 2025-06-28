@@ -16,6 +16,7 @@ class Loan extends Model
         'client_id',
         'loan_manager_id',
         'principal_amount',
+        'processing_fee',
         'interest_rate',
         'term',
         'repayment_frequency',

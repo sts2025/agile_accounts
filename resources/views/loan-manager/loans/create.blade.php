@@ -26,6 +26,11 @@
                     <input type="number" step="0.01" class="form-control" id="principal_amount" name="principal_amount" required>
                 </div>
 
+                <div class="mb-3">
+                    <label for="processing_fee" class="form-label">Processing Fee (UGX)</label>
+                    <input type="number" step="0.01" class="form-control" id="processing_fee" name="processing_fee" value="0">
+                </div>
+
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         <label for="interest_rate" class="form-label">Interest Rate (%)</label>

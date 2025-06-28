@@ -37,6 +37,7 @@
             @endphp
             <p><strong>Client:</strong> {{ $loan->client->name }}</p>
             <p><strong>Principal Amount:</strong> UGX {{ number_format($loan->principal_amount, 2) }}</p>
+            <p><strong>Processing Fee:</strong> UGX {{ number_format($loan->processing_fee, 2) }}</p>
             <p><strong>Total Paid:</strong> <span class="text-success">UGX {{ number_format($totalPaid, 2) }}</span></p>
             <p><strong>Remaining Balance:</strong> <span class="text-danger">UGX {{ number_format($remainingBalance, 2) }}</span></p>
             <p><strong>Status:</strong> <span class="badge {{ $badgeColor }}">{{ ucfirst($loan->status) }}</span></p>
