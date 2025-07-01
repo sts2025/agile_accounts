@@ -44,8 +44,8 @@
                             <tr>
                                 <td>{{ $manager->name }}</td>
                                 <td>{{ $manager->email }}</td>
-                                <td>{{ $manager->loanManager->phone_number }}</td>
-                                <td>{{ $manager->loanManager->address }}</td>
+                                <td>{{ $manager->loanManager->phone_number ?? 'N/A' }}</td>
+                                <td>{{ $manager->loanManager->address ?? 'N/A' }}</td>
                                 <td>
                                     @if ($manager->loanManager->is_active)
                                         <span class="badge bg-success">Active</span>

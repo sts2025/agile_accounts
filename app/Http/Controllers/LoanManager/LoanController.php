@@ -50,49 +50,67 @@ class LoanController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-  public function store(Request $request)
-{
-    // 1. Validate all possible data from the form
-    $validatedData = $request->validate([
-        'client_id' => 'required|exists:clients,id',
-        'principal_amount' => 'required|numeric|min:0',
-        'processing_fee' => 'nullable|numeric|min:0',
-        'interest_rate' => 'required|numeric|min:0',
-        'term' => 'required|integer|min:1',
-        'start_date' => 'required|date',
-        // Guarantor Details Rules
-        'guarantor_first_name' => 'nullable|string|max:255',
-        'guarantor_last_name' => 'required_with:guarantor_first_name|string|max:255',
-        'guarantor_phone_number' => 'required_with:guarantor_first_name|string|max:20',
-        'guarantor_address' => 'required_with:guarantor_first_name|string|max:255', // <-- ADDED THIS RULE
-        'guarantor_relationship' => 'required_with:guarantor_first_name|string|max:100',
-        // Collateral Details Rules
-        'collateral_type' => 'nullable|string|max:100',
-        'collateral_description' => 'required_with:collateral_type|string',
-        'collateral_valuation_amount' => 'required_with:collateral_type|numeric|min:0',
-    ]);
+    public function store(Request $request)
+    {
+        // 1. Validate all possible data from the form
+        $validatedData = $request->validate([
+            'client_id' => 'required|exists:clients,id',
+            'principal_amount' => 'required|numeric|min:0',
+            'processing_fee' => 'nullable|numeric|min:0',
+            'interest_rate' => 'required|numeric|min:0',
+            'term' => 'required|integer|min:1',
+            'start_date' => 'required|date',
+            'guarantor_first_name' => 'nullable|string|max:255',
+            'guarantor_last_name' => 'required_with:guarantor_first_name|string|max:255',
+            'guarantor_phone_number' => 'required_with:guarantor_first_name|string|max:20',
+            'guarantor_address' => 'required_with:guarantor_first_name|string|max:255',
+            'guarantor_relationship' => 'required_with:guarantor_first_name|string|max:100',
+            'collateral_type' => 'nullable|string|max:100',
+            'collateral_description' => 'required_with:collateral_type|string',
+            'collateral_valuation_amount' => 'required_with:collateral_type|numeric|min:0',
+        ]);
 
-    DB::transaction(function () use ($validatedData, $request) {
-        $loan = Loan::create([ /* ... loan data ... */ ]);
-
-        if ($request->filled('guarantor_first_name')) {
-            $loan->guarantors()->create([
-                'first_name' => $validatedData['guarantor_first_name'],
-                'last_name' => $validatedData['guarantor_last_name'],
-                'phone_number' => $validatedData['guarantor_phone_number'],
-                'address' => $validatedData['guarantor_address'], // <-- ADDED THIS FIELD
-                'relationship_to_borrower' => $validatedData['guarantor_relationship'],
+        // Use a database transaction to ensure everything saves successfully, or nothing does.
+        DB::transaction(function () use ($validatedData, $request) {
+            // 2. Create the Loan first, making sure to include the client_id
+            $loan = Loan::create([
+                'client_id' => $validatedData['client_id'], // <-- THIS IS THE FIX
+                'loan_manager_id' => Auth::id(),
+                'principal_amount' => $validatedData['principal_amount'],
+                'processing_fee' => $validatedData['processing_fee'] ?? 0,
+                'interest_rate' => $validatedData['interest_rate'],
+                'term' => $validatedData['term'],
+                'start_date' => $validatedData['start_date'],
+                'status' => 'active',
             ]);
-        }
 
-        if ($request->filled('collateral_type')) {
-            $loan->collaterals()->create([ /* ... collateral data ... */ ]);
-        }
-        $this->recordLoanDisbursement($loan);
-    });
+            // 3. If Guarantor details were provided, create the Guarantor
+            if ($request->filled('guarantor_first_name')) {
+                $loan->guarantors()->create([
+                    'first_name' => $validatedData['guarantor_first_name'],
+                    'last_name' => $validatedData['guarantor_last_name'],
+                    'phone_number' => $validatedData['guarantor_phone_number'],
+                    'address' => $validatedData['guarantor_address'],
+                    'relationship_to_borrower' => $validatedData['guarantor_relationship'],
+                ]);
+            }
 
-    return redirect()->route('loans.index')->with('status', 'New loan and associated details have been created successfully!');
-}
+            // 4. If Collateral details were provided, create the Collateral
+            if ($request->filled('collateral_type')) {
+                $loan->collaterals()->create([
+                    'collateral_type' => $validatedData['collateral_type'],
+                    'description' => $validatedData['collateral_description'],
+                    'valuation_amount' => $validatedData['collateral_valuation_amount'],
+                ]);
+            }
+
+            // 5. Record the accounting transaction
+            $this->recordLoanDisbursement($loan);
+        });
+
+        // 6. Redirect with a success message
+        return redirect()->route('loans.index')->with('status', 'New loan has been created successfully!');
+    }
     /**
      * Display the specified resource.
      */
