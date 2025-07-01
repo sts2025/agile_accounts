@@ -23,57 +23,6 @@
             <div class="alert alert-danger">{{ session('error') }}</div>
         @endif
 
-        <div class="row mb-4">
-            <div class="col-md-3">
-                <div class="card text-white bg-primary">
-                    <div class="card-body">
-                        <h5 class="card-title">Total Managers</h5>
-                        <p class="card-text fs-4">{{ $loanManagerCount }}</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-white bg-secondary">
-                    <div class="card-body">
-                        <h5 class="card-title">Total Clients</h5>
-                        <p class="card-text fs-4">{{ $clientCount }}</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-white bg-success">
-                    <div class="card-body">
-                        <h5 class="card-title">Total Loans</h5>
-                        <p class="card-text fs-4">{{ $totalLoans }}</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card text-white bg-info">
-                    <div class="card-body">
-                        <h5 class="card-title">Total Loaned</h5>
-                        <p class="card-text fs-4">UGX {{ number_format($totalLoanedAmount, 2) }}</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-<div class="card mb-4">
-            <div class="card-header">
-                <h4>Financial Reports</h4>
-            </div>
-            <div class="card-body">
-                <a href="{{ route('admin.reports.trial-balance') }}" class="btn btn-secondary">View Trial Balance</a>
-                 <a href="{{ route('admin.reports.profit-and-loss') }}" class="btn btn-secondary">View Profit & Loss</a>
-                 <a href="{{ route('admin.reports.balance-sheet') }}" class="btn btn-secondary">View Balance Sheet</a>
-            </div>
-            </div>
-                </div>
-        </div>
-
-        <div class="card">
-        ```
-
-
         <div class="card">
             <div class="card-header">
                 <h4>Manage Loan Managers</h4>
@@ -84,6 +33,8 @@
                         <tr>
                             <th>Name</th>
                             <th>Email</th>
+                            <th>Phone Number</th>
+                            <th>Address</th>
                             <th>Status</th>
                             <th>Action</th>
                         </tr>
@@ -93,6 +44,8 @@
                             <tr>
                                 <td>{{ $manager->name }}</td>
                                 <td>{{ $manager->email }}</td>
+                                <td>{{ $manager->loanManager->phone_number }}</td>
+                                <td>{{ $manager->loanManager->address }}</td>
                                 <td>
                                     @if ($manager->loanManager->is_active)
                                         <span class="badge bg-success">Active</span>
@@ -101,26 +54,26 @@
                                     @endif
                                 </td>
                                 <td>
-    @if ($manager->loanManager->is_active)
-        <form method="POST" action="{{ route('admin.managers.suspend', $manager->id) }}">
-            @csrf
-            <button type="submit" class="btn btn-warning btn-sm">Suspend</button>
-        </form>
-    @else
-        <form method="POST" action="{{ route('admin.managers.activate', $manager->id) }}">
-            @csrf
-            <button type="submit" class="btn btn-success btn-sm">Activate</button>
-        </form>
-    @endif
-</td>
+                                    @if ($manager->loanManager->is_active)
+                                        <form method="POST" action="{{ route('admin.managers.suspend', $manager->id) }}">
+                                            @csrf
+                                            <button type="submit" class="btn btn-warning btn-sm">Suspend</button>
+                                        </form>
+                                    @else
+                                        <form method="POST" action="{{ route('admin.managers.activate', $manager->id) }}">
+                                            @csrf
+                                            <button type="submit" class="btn btn-success btn-sm">Activate</button>
+                                        </form>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="4" class="text-center">There are no loan managers in the system.</td>
+                                <td colspan="6" class="text-center">There are no loan managers in the system.</td>
                             </tr>
                         @endforelse
                     </tbody>
-                    </table>
+                </table>
             </div>
         </div>
     </div>

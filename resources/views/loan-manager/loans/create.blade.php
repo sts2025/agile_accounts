@@ -40,22 +40,15 @@
                     <div class="col-md-6 mb-3"><label for="guarantor_last_name" class="form-label">Last Name</label><input type="text" class="form-control" name="guarantor_last_name"></div>
                 </div>
                 <div class="mb-3"><label for="guarantor_phone_number" class="form-label">Phone Number</label><input type="text" class="form-control" name="guarantor_phone_number"></div>
-                
+                <div class="mb-3"><label for="guarantor_address" class="form-label">Address</label><input type="text" class="form-control" name="guarantor_address"></div>
                 <div class="mb-3"><label for="guarantor_relationship" class="form-label">Relationship to Client</label><input type="text" class="form-control" name="guarantor_relationship" placeholder="e.g., Brother, Friend, Co-worker"></div>
-                
                 <hr>
 
-                {{-- GUARANTOR DETAILS SECTION --}}
-<h4 class="mb-3 mt-4">Guarantor Details (Optional)</h4>
-<div class="row">
-    <div class="col-md-6 mb-3"><label for="guarantor_first_name" class="form-label">First Name</label><input type="text" class="form-control" name="guarantor_first_name"></div>
-    <div class="col-md-6 mb-3"><label for="guarantor_last_name" class="form-label">Last Name</label><input type="text" class="form-control" name="guarantor_last_name"></div>
-</div>
-<div class="mb-3"><label for="guarantor_phone_number" class="form-label">Phone Number</label><input type="text" class="form-control" name="guarantor_phone_number"></div>
-
-<div class="mb-3"><label for="guarantor_address" class="form-label">Address</label><input type="text" class="form-control" name="guarantor_address"></div>
-
-<div class="mb-3"><label for="guarantor_relationship" class="form-label">Relationship to Client</label><input type="text" class="form-control" name="guarantor_relationship" placeholder="e.g., Brother, Friend, Co-worker"></div>
+                {{-- COLLATERAL DETAILS SECTION --}}
+                <h4 class="mb-3 mt-4">Collateral Details (Optional)</h4>
+                <div class="mb-3"><label for="collateral_type" class="form-label">Type of Collateral</label><input type="text" class="form-control" name="collateral_type" placeholder="e.g., Land Title, Vehicle Logbook"></div>
+                <div class="mb-3"><label for="collateral_description" class="form-label">Description</label><textarea class="form-control" name="collateral_description" rows="2" placeholder="e.g., Toyota Corolla, Reg No. UBA 123X"></textarea></div>
+                <div class="mb-3"><label for="collateral_valuation_amount" class="form-label">Valuation Amount (UGX)</label><input type="number" step="0.01" class="form-control" name="collateral_valuation_amount"></div>
 
                 <div class="mt-4">
                     <button type="submit" class="btn btn-primary">Save New Loan</button>

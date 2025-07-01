@@ -24,7 +24,7 @@ use App\Http\Controllers\LoanManager\ReportController as LoanManagerReportContro
 
 // Homepage
 Route::get('/', function () {
-    return view('welcome');
+    return redirect()->route('login');
 });
 
 // Authentication Routes (for users who are not logged in)
