@@ -10,6 +10,9 @@ use App\Models\GeneralLedgerTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use App\Models\Guarantor;
+use App\Models\Collateral;
 
 class LoanController extends Controller
 {
@@ -49,25 +52,67 @@ class LoanController extends Controller
      */
     public function store(Request $request)
     {
+        // 1. Validate all possible data from the form
         $validatedData = $request->validate([
+            // Loan Details
             'client_id' => 'required|exists:clients,id',
             'principal_amount' => 'required|numeric|min:0',
             'processing_fee' => 'nullable|numeric|min:0',
             'interest_rate' => 'required|numeric|min:0',
             'term' => 'required|integer|min:1',
             'start_date' => 'required|date',
+            // Guarantor Details (conditionally required)
+            'guarantor_first_name' => 'nullable|string|max:255',
+            'guarantor_last_name' => 'required_with:guarantor_first_name|string|max:255',
+            'guarantor_phone_number' => 'required_with:guarantor_first_name|string|max:20',
+            'guarantor_relationship' => 'required_with:guarantor_first_name|string|max:100', // <-- ADDED THIS RULE
+            // Collateral Details (conditionally required)
+            'collateral_type' => 'nullable|string|max:100',
+            'collateral_description' => 'required_with:collateral_type|string',
+            'collateral_valuation_amount' => 'required_with:collateral_type|numeric|min:0',
         ]);
 
-        $loan = Loan::create(array_merge($validatedData, [
-            'loan_manager_id' => Auth::id(),
-            'status' => 'active',
-            'repayment_frequency' => 'monthly',
-        ]));
+        // Use a database transaction to ensure everything saves successfully, or nothing does.
+        DB::transaction(function () use ($validatedData, $request) {
+            // 2. Create the Loan first
+            $loan = Loan::create([
+                'client_id' => $validatedData['client_id'],
+                'loan_manager_id' => Auth::id(),
+                'principal_amount' => $validatedData['principal_amount'],
+                'processing_fee' => $validatedData['processing_fee'] ?? 0,
+                'interest_rate' => $validatedData['interest_rate'],
+                'term' => $validatedData['term'],
+                'start_date' => $validatedData['start_date'],
+                'status' => 'active',
+                'repayment_frequency' => 'monthly',
+            ]);
 
-        $this->recordLoanDisbursement($loan);
-        return redirect()->route('loans.index')->with('status', 'New loan has been created successfully!');
+            // 3. If Guarantor details were provided, create the Guarantor
+            if ($request->filled('guarantor_first_name')) {
+                $loan->guarantors()->create([
+                    'first_name' => $validatedData['guarantor_first_name'],
+                    'last_name' => $validatedData['guarantor_last_name'],
+                    'phone_number' => $validatedData['guarantor_phone_number'],
+                    'relationship_to_borrower' => $validatedData['guarantor_relationship'], // <-- ADDED THIS FIELD
+                ]);
+            }
+
+            // 4. If Collateral details were provided, create the Collateral
+            if ($request->filled('collateral_type')) {
+                $loan->collaterals()->create([
+                    'collateral_type' => $validatedData['collateral_type'],
+                    'description' => $validatedData['collateral_description'],
+                    'valuation_amount' => $validatedData['collateral_valuation_amount'],
+                ]);
+            }
+
+            // 5. Record the accounting transaction for the loan disbursement
+            $this->recordLoanDisbursement($loan);
+        });
+
+        // 6. Redirect to the loan list with a success message
+        return redirect()->route('loans.index')->with('status', 'New loan and associated details have been created successfully!');
     }
-
     /**
      * Display the specified resource.
      */

@@ -17,10 +17,7 @@
                     <input type="text" class="form-control" id="name" name="name" value="{{ $client->name }}" required>
                 </div>
 
-                <div class="mb-3">
-                    <label for="email" class="form-label">Email Address</label>
-                    <input type="email" class="form-control" id="email" name="email" value="{{ $client->email }}" required>
-                </div>
+               
 
                 <div class="mb-3">
                     <label for="phone_number" class="form-label">Phone Number</label>

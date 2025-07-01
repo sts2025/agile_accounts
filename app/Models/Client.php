@@ -18,7 +18,7 @@ class Client extends Model
     protected $fillable = [
         'loan_manager_id',
         'name',
-        'email',
+        //'email',
         'phone_number',
         'address',
     ];

@@ -31,7 +31,7 @@
     </main>
 
     <footer class="container text-center mt-5 py-3 text-muted border-top">
-        <p>Developed by <a href="https://www.stsug.site" target="_blank" rel="noopener noreferrer">stsug</a> &copy; {{ now()->year }} | Need help? Contact support at <strong>0740859082</strong></p>
+        <p>Developed by <a href="https://www.stsug.site" target="_blank" rel="noopener noreferrer">BKR TECH</a> &copy; {{ now()->year }} | Need help? Contact support at <strong>0740859082</strong></p>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

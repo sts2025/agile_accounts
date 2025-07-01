@@ -32,7 +32,6 @@
                 <thead>
                     <tr>
                         <th>Name</th>
-                        <th>Email</th>
                         <th>Phone Number</th>
                         <th>Actions</th>
                     </tr>
@@ -41,7 +40,6 @@
                     @forelse ($clients as $client)
                         <tr>
                             <td>{{ $client->name }}</td>
-                            <td>{{ $client->email }}</td>
                             <td>{{ $client->phone_number }}</td>
                             <td>
                                 <a href="{{ route('clients.edit', $client->id) }}" class="btn btn-secondary btn-sm">Edit</a>
@@ -54,7 +52,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="4" class="text-center">No clients match your search or you have not added any clients yet.</td>
+                            <td colspan="3" class="text-center">No clients match your search or you have not added any clients yet.</td>
                         </tr>
                     @endforelse
                 </tbody>

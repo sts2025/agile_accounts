@@ -6,8 +6,7 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h1>Loan Details</h1>
         <div class="btn-group">
-            <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#collateralModal">Add Collateral</button>
-            <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#guarantorModal">Add Guarantor</button>
+        
             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#paymentModal">Record a Payment</button>
         </div>
     </div>

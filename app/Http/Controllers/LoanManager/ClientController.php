@@ -19,14 +19,15 @@ class ClientController extends Controller
         $query = Auth::user()->clients();
 
         // Check if a search term was submitted
-        if ($search = $request->input('search')) {
-            // Add the case-insensitive search filter to the working query
-            $query->where(function($subQuery) use ($search) {
-                $searchTerm = strtolower($search);
-                $subQuery->whereRaw('LOWER(name) LIKE ?', ["%{$searchTerm}%"])
-                         ->orWhereRaw('LOWER(email) LIKE ?', ["%{$searchTerm}%"]);
-            });
-        }
+        // In index() method
+if ($search = $request->input('search')) {
+    $searchTerm = strtolower($search);
+    // The query now only searches the name column
+    $query->whereRaw('LOWER(name) LIKE ?', ["%{$searchTerm}%"]);
+}
+        
+
+
 
         // Now, execute the final query
         $clients = $query->latest()->get();
@@ -49,7 +50,7 @@ class ClientController extends Controller
     {
         $validatedData = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:clients',
+            //'email' => 'required|string|email|max:255|unique:clients',
             'phone_number' => 'required|string|max:20',
             'address' => 'nullable|string',
         ]);
@@ -90,7 +91,7 @@ class ClientController extends Controller
 
         $validatedData = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('clients')->ignore($client->id)],
+            //'email' => ['required', 'string', 'email', 'max:255', Rule::unique('clients')->ignore($client->id)],
             'phone_number' => 'required|string|max:20',
             'address' => 'nullable|string',
         ]);
