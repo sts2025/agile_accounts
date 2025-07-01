@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('general_ledger_transactions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('account_id')->constrained();
-            $table->foreignId('loan_id')->nullable()->constrained();
+            $table->foreignId('loan_id')->nullable()->constrained()->onDelete('cascade');
             $table->date('transaction_date');
             $table->string('description');
             $table->decimal('debit', 15, 2)->default(0);
@@ -31,3 +31,5 @@ return new class extends Migration
         Schema::dropIfExists('general_ledger_transactions');
     }
 };
+
+

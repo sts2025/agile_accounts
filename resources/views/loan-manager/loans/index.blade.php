@@ -42,7 +42,7 @@
                 <tbody>
                     @forelse ($loans as $loan)
                         <tr>
-                            <td>{{ $loan->client->name }}</td>
+                            <td>{{ $loan->client->name ?? 'Client Not Found' }}</td>
                             <td>{{ number_format($loan->principal_amount, 2) }}</td>
                             <td>{{ $loan->interest_rate }}%</td>
                             <td>{{ $loan->term }}</td>
