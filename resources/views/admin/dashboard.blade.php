@@ -101,18 +101,18 @@
                                     @endif
                                 </td>
                                 <td>
-                                    @if ($manager->loanManager->is_active)
-                                        <form method="POST" action="{{ route('admin.managers.suspend', $manager->id) }}">
-                                            @csrf
-                                            <button type="submit" class="btn btn-warning btn-sm">Suspend</button>
-                                        </form>
-                                    @else
-                                        <form method="POST" action="{{ route('admin.managers.activate', $manager->id) }}">
-                                            @csrf
-                                            <button type="submit" class="btn btn-success btn-sm">Activate</button>
-                                        </form>
-                                    @endif
-                                </td>
+    @if ($manager->loanManager->is_active)
+        <form method="POST" action="{{ route('admin.managers.suspend', $manager->id) }}">
+            @csrf
+            <button type="submit" class="btn btn-warning btn-sm">Suspend</button>
+        </form>
+    @else
+        <form method="POST" action="{{ route('admin.managers.activate', $manager->id) }}">
+            @csrf
+            <button type="submit" class="btn btn-success btn-sm">Activate</button>
+        </form>
+    @endif
+</td>
                             </tr>
                         @empty
                             <tr>
