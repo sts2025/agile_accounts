@@ -23,9 +23,9 @@
             <div class="alert alert-danger">{{ session('error') }}</div>
         @endif
 
-        <div class="card">
+        <div class="card mb-4">
             <div class="card-header">
-                <h4>Manage Loan Managers</h4>
+                <h4>Loan Managers Awaiting Activation</h4>
             </div>
             <div class="card-body">
                 <table class="table table-striped">
@@ -35,41 +35,65 @@
                             <th>Email</th>
                             <th>Phone Number</th>
                             <th>Address</th>
-                            <th>Status</th>
-                            <th>Action</th>
+                            <th class="text-center">Action</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse ($loanManagers as $manager)
+                        @forelse ($loanManagers->where('loanManager.is_active', false) as $manager)
                             <tr>
                                 <td>{{ $manager->name }}</td>
                                 <td>{{ $manager->email }}</td>
                                 <td>{{ $manager->loanManager->phone_number ?? 'N/A' }}</td>
                                 <td>{{ $manager->loanManager->address ?? 'N/A' }}</td>
-                                <td>
-                                    @if ($manager->loanManager->is_active)
-                                        <span class="badge bg-success">Active</span>
-                                    @else
-                                        <span class="badge bg-warning text-dark">Inactive</span>
-                                    @endif
-                                </td>
-                                <td>
-                                    @if ($manager->loanManager->is_active)
-                                        <form method="POST" action="{{ route('admin.managers.suspend', $manager->id) }}">
-                                            @csrf
-                                            <button type="submit" class="btn btn-warning btn-sm">Suspend</button>
-                                        </form>
-                                    @else
-                                        <form method="POST" action="{{ route('admin.managers.activate', $manager->id) }}">
-                                            @csrf
-                                            <button type="submit" class="btn btn-success btn-sm">Activate</button>
-                                        </form>
-                                    @endif
+                                <td class="text-center">
+                                    <form method="POST" action="{{ route('admin.managers.activate', $manager->id) }}">
+                                        @csrf
+                                        <button type="submit" class="btn btn-success btn-sm">Activate</button>
+                                    </form>
                                 </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="text-center">There are no loan managers in the system.</td>
+                                <td colspan="5" class="text-center">No loan managers are currently awaiting activation.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h4>Active Loan Managers</h4>
+            </div>
+            <div class="card-body">
+                 <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Phone Number</th>
+                            <th>Address</th>
+                            <th class="text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($loanManagers->where('loanManager.is_active', true) as $manager)
+                            <tr>
+                                <td>{{ $manager->name }}</td>
+                                <td>{{ $manager->email }}</td>
+                                <td>{{ $manager->loanManager->phone_number ?? 'N/A' }}</td>
+                                <td>{{ $manager->loanManager->address ?? 'N/A' }}</td>
+                                <td class="text-center">
+                                    <form method="POST" action="{{ route('admin.managers.suspend', $manager->id) }}">
+                                        @csrf
+                                        <button type="submit" class="btn btn-warning btn-sm">Suspend</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="5" class="text-center">There are no active loan managers.</td>
                             </tr>
                         @endforelse
                     </tbody>
