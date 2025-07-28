@@ -69,6 +69,9 @@ Route::middleware(['auth'])->group(function () {
 // For confirming password to edit a payment
 Route::get('/payments/{payment}/edit/confirm', [PaymentController::class, 'showPasswordConfirmationForm'])->name('payments.edit.confirm');
 Route::post('/payments/{payment}/edit/confirm', [PaymentController::class, 'confirmPassword'])->name('payments.password.confirm');
+// For the Loan Agreement PDF
+Route::get('/loans/{loan}/agreement', [LoanController::class, 'downloadLoanAgreement'])->name('loans.agreement.pdf');
+
 });
 
 
@@ -85,8 +88,9 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
 // Routes for sending broadcast messages
     Route::get('/broadcast/create', [BroadcastMessageController::class, 'create'])->name('broadcast.create');
     Route::post('/broadcast', [BroadcastMessageController::class, 'store'])->name('broadcast.store');
-});
-
 // Routes for editing and updating a payment
     Route::get('/payments/{payment}/edit', [PaymentController::class, 'edit'])->name('payments.edit');
     Route::put('/payments/{payment}', [PaymentController::class, 'update'])->name('payments.update');
+
+});
+
