@@ -21,6 +21,7 @@ class Client extends Model
         //'email',
         'phone_number',
         'address',
+        'business_occupation'
     ];
     public function loans()
     {

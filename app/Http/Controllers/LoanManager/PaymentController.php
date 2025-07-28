@@ -11,35 +11,47 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Hash;
 
 class PaymentController extends Controller
 {
     /**
      * Store a newly created payment in storage.
      */
-    public function store(Request $request)
-    {
-        $validatedData = $request->validate([
-            'loan_id' => ['required', Rule::exists('loans', 'id')->where('loan_manager_id', Auth::id())],
-            'amount_paid' => 'required|numeric|min:0.01',
-            'payment_date' => 'required|date',
-            'payment_method' => 'required|string',
-            'receipt_number' => 'nullable|string',
-            'notes' => 'nullable|string',
-        ]);
+   public function store(Request $request)
+{
+    // 1. Validate the incoming data (receipt_number is no longer here)
+    $validatedData = $request->validate([
+        'loan_id' => ['required', Rule::exists('loans', 'id')->where('loan_manager_id', Auth::id())],
+        'amount_paid' => 'required|numeric|min:0.01',
+        'payment_date' => 'required|date',
+        'payment_method' => 'required|string',
+        'notes' => 'nullable|string',
+    ]);
 
-        $payment = Payment::create($validatedData);
-        
-        $this->recordPaymentTransaction($payment);
-        
-        if ($this->isLoanFullyPaid($payment->loan)) {
-            $payment->loan->status = 'paid';
-            $payment->loan->save();
-        }
+    // --- NEW: Generate a unique receipt number ---
+    $year = now()->year;
+    $latestPayment = Payment::whereYear('created_at', $year)->latest('id')->first();
+    $nextId = $latestPayment ? (int)substr($latestPayment->receipt_number, 5) + 1 : 1;
+    $receiptNumber = $year . '-' . str_pad($nextId, 4, '0', STR_PAD_LEFT);
 
-        return redirect()->route('loans.show', $validatedData['loan_id'])
-                         ->with('status', 'Payment has been recorded successfully!');
+    // Add the generated receipt number to the data to be saved
+    $validatedData['receipt_number'] = $receiptNumber;
+
+    // 2. Create the payment record
+    $payment = Payment::create($validatedData);
+
+    // The rest of the function remains the same
+    $this->recordPaymentTransaction($payment);
+
+    if ($this->isLoanFullyPaid($payment->loan)) {
+        $payment->loan->status = 'paid';
+        $payment->loan->save();
     }
+
+    return redirect()->route('loans.show', $validatedData['loan_id'])
+                     ->with('status', 'Payment recorded successfully! Receipt No: ' . $receiptNumber);
+}
 
     /**
      * Generate a PDF receipt for a specific payment.
@@ -107,5 +119,77 @@ class PaymentController extends Controller
             return $totalPaid >= $totalLoanCost;
         }
         return false;
+    }
+    // In PaymentController.php
+
+/**
+ * Show the password confirmation form before editing a payment.
+ */
+public function showPasswordConfirmationForm(Payment $payment)
+{
+    // Authorize: Ensure the user owns the loan associated with this payment
+    if (Auth::id() !== $payment->loan->loan_manager_id) {
+        abort(403);
+    }
+    return view('loan-manager.payments.confirm-password', compact('payment'));
+}
+
+/**
+ * Handle the password confirmation and redirect to the edit form.
+ */
+public function confirmPassword(Request $request, Payment $payment)
+{
+    // Authorize again
+    if (Auth::id() !== $payment->loan->loan_manager_id) {
+        abort(403);
+    }
+
+    // Validate that a password was submitted
+    $request->validate(['password' => 'required|string']);
+
+    // Check if the submitted password matches the logged-in user's password
+    if (!Hash::check($request->password, Auth::user()->password)) {
+        return back()->withErrors(['password' => 'The provided password does not match your current password.']);
+    }
+
+    // If password is correct, store a confirmation timestamp in the session
+    // and redirect to the actual edit page.
+    $request->session()->put('payment_edit_confirmed_at_' . $payment->id, now());
+
+    return redirect()->route('payments.edit', $payment);
+}
+public function edit(Request $request, Payment $payment)
+    {
+        // This is our new security check. It ensures a user can only get to this page
+        // if they have confirmed their password in the last 10 minutes.
+        $confirmationKey = 'payment_edit_confirmed_at_' . $payment->id;
+        if (!$request->session()->has($confirmationKey) || now()->diffInMinutes($request->session()->get($confirmationKey)) > 10) {
+            return redirect()->route('payments.edit.confirm', $payment->id);
+        }
+
+        return view('loan-manager.payments.edit', compact('payment'));
+    }
+
+    /**
+     * Update the specified payment in storage.
+     */
+    public function update(Request $request, Payment $payment)
+    {
+        if (Auth::id() !== $payment->loan->loan_manager_id) {
+            abort(403);
+        }
+        $validatedData = $request->validate([
+            'amount_paid' => 'required|numeric|min:0.01',
+            'payment_date' => 'required|date',
+            'payment_method' => 'required|string',
+            'notes' => 'nullable|string',
+        ]);
+
+        $payment->update($validatedData);
+        
+        // After updating, forget the session key
+        $request->session()->forget('payment_edit_confirmed_at_' . $payment->id);
+
+        return redirect()->route('loans.show', $payment->loan_id)->with('status', 'Payment updated successfully!');
     }
 }

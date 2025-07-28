@@ -7,6 +7,12 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
+    <div class="card mb-4">
+    <div class="card-header"><h4>Quick Actions</h4></div>
+    <div class="card-body">
+        <a href="{{ route('admin.broadcast.create') }}" class="btn btn-primary">Send Broadcast Message</a>
+        </div>
+</div>
     <div class="container mt-5">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1>Admin Dashboard</h1>

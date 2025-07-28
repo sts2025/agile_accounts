@@ -19,6 +19,7 @@ class Guarantor extends Model
         'nin',
         'phone_number',
         'address',
+        'occupation',
         'relationship_to_borrower',
     ];
 

@@ -19,7 +19,7 @@
         <div class="card-body">
             <form method="GET" action="{{ route('clients.index') }}">
                 <div class="input-group">
-                    <input type="text" name="search" class="form-control" placeholder="Search by name or email..." value="{{ request('search') }}">
+                    <input type="text" name="search" class="form-control" placeholder="Search by name..." value="{{ request('search') }}">
                     <button class="btn btn-primary" type="submit">Search</button>
                 </div>
             </form>
@@ -33,6 +33,8 @@
                     <tr>
                         <th>Name</th>
                         <th>Phone Number</th>
+                        <th>Address</th>
+                        <th>Occupation</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -41,6 +43,8 @@
                         <tr>
                             <td>{{ $client->name }}</td>
                             <td>{{ $client->phone_number }}</td>
+                            <td>{{ $client->address }}</td>
+                            <td>{{ $client->business_occupation ?? 'N/A' }}</td>
                             <td>
                                 <a href="{{ route('clients.edit', $client->id) }}" class="btn btn-secondary btn-sm">Edit</a>
                                 <form method="POST" action="{{ route('clients.destroy', $client->id) }}" style="display:inline;">
@@ -52,7 +56,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="3" class="text-center">No clients match your search or you have not added any clients yet.</td>
+                            <td colspan="5" class="text-center">No clients match your search or you have not added any clients yet.</td>
                         </tr>
                     @endforelse
                 </tbody>

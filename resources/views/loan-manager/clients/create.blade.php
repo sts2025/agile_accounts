@@ -28,6 +28,11 @@
                     <textarea class="form-control" id="address" name="address" rows="3"></textarea>
                 </div>
 
+                <div class="mb-3">
+                    <label for="business_occupation" class="form-label">Business / Occupation (Optional)</label>
+                    <input type="text" class="form-control" id="business_occupation" name="business_occupation">
+               </div>
+
                 <button type="submit" class="btn btn-primary">Save Client</button>
                 <a href="{{ route('clients.index') }}" class="btn btn-secondary">Cancel</a>
             </form>

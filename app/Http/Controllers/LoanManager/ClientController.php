@@ -53,6 +53,7 @@ if ($search = $request->input('search')) {
             //'email' => 'required|string|email|max:255|unique:clients',
             'phone_number' => 'required|string|max:20',
             'address' => 'nullable|string',
+            'business_occupation' => 'nullable|string|max:255',
         ]);
 
         Auth::user()->clients()->create($validatedData);
@@ -94,6 +95,7 @@ if ($search = $request->input('search')) {
             //'email' => ['required', 'string', 'email', 'max:255', Rule::unique('clients')->ignore($client->id)],
             'phone_number' => 'required|string|max:20',
             'address' => 'nullable|string',
+            'business_occupation' => 'nullable|string|max:255',
         ]);
 
         $client->update($validatedData);

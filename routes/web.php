@@ -13,6 +13,7 @@ use App\Http\Controllers\LoanManager\CollateralController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\LoanManager\ReportController as LoanManagerReportController;
+use App\Http\Controllers\Admin\BroadcastMessageController;
 
 /*
 |--------------------------------------------------------------------------
@@ -49,16 +50,11 @@ Route::middleware(['auth'])->group(function () {
     
     // Loan Manager's Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-
-    // Loan Manager's Profile
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
-
-    // This single line creates all client routes: index, create, store, etc.
-    // This provides the 'clients.index' route that was missing.
     Route::resource('clients', ClientController::class);
-     Route::resource('loans', LoanController::class);
-     Route::post('/payments', [PaymentController::class, 'store'])->name('payments.store');
-     Route::post('/guarantors', [GuarantorController::class, 'store'])->name('guarantors.store');
+    Route::resource('loans', LoanController::class);
+    Route::post('/payments', [PaymentController::class, 'store'])->name('payments.store');
+    Route::post('/guarantors', [GuarantorController::class, 'store'])->name('guarantors.store');
     Route::post('/collaterals', [CollateralController::class, 'store'])->name('collaterals.store');
     Route::get('/payments/{payment}/receipt', [PaymentController::class, 'showReceipt'])->name('payments.receipt');
     Route::get('/dashboard/reports/trial-balance', [LoanManagerReportController::class, 'trialBalance'])->name('manager.reports.trial-balance');
@@ -67,6 +63,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard/reports/profit-and-loss/pdf', [LoanManagerReportController::class, 'downloadProfitAndLoss'])->name('manager.reports.profit-and-loss.pdf');
     Route::get('/dashboard/reports/balance-sheet', [LoanManagerReportController::class, 'balanceSheet'])->name('manager.reports.balance-sheet');
     Route::get('/dashboard/reports/balance-sheet/pdf', [LoanManagerReportController::class, 'downloadBalanceSheet'])->name('manager.reports.balance-sheet.pdf');
+     // For the manager's Aging Analysis report
+    Route::get('/dashboard/reports/aging-analysis', [LoanManagerReportController::class, 'agingAnalysis'])->name('manager.reports.aging-analysis');
+    Route::get('/dashboard/reports/aging-analysis/pdf', [LoanManagerReportController::class, 'downloadAgingAnalysis'])->name('manager.reports.aging-analysis.pdf');
+// For confirming password to edit a payment
+Route::get('/payments/{payment}/edit/confirm', [PaymentController::class, 'showPasswordConfirmationForm'])->name('payments.edit.confirm');
+Route::post('/payments/{payment}/edit/confirm', [PaymentController::class, 'confirmPassword'])->name('payments.password.confirm');
 });
 
 
@@ -80,4 +82,11 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('/reports/trial-balance', [ReportController::class, 'trialBalance'])->name('reports.trial-balance');
     Route::get('/reports/profit-and-loss', [ReportController::class, 'profitAndLoss'])->name('reports.profit-and-loss');
     Route::get('/reports/balance-sheet', [ReportController::class, 'balanceSheet'])->name('reports.balance-sheet');
+// Routes for sending broadcast messages
+    Route::get('/broadcast/create', [BroadcastMessageController::class, 'create'])->name('broadcast.create');
+    Route::post('/broadcast', [BroadcastMessageController::class, 'store'])->name('broadcast.store');
 });
+
+// Routes for editing and updating a payment
+    Route::get('/payments/{payment}/edit', [PaymentController::class, 'edit'])->name('payments.edit');
+    Route::put('/payments/{payment}', [PaymentController::class, 'update'])->name('payments.update');

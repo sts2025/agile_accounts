@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Account;
 use Illuminate\Support\Facades\Auth;
 use Barryvdh\DomPDF\Facade\Pdf;
+use App\Models\Loan;
 use Carbon\Carbon;
 
 class ReportController extends Controller
@@ -148,5 +149,82 @@ class ReportController extends Controller
         $totalLiabilitiesAndEquity = $totalLiabilities + $totalEquity;
 
         return compact('assets', 'liabilities', 'equityAccounts', 'netIncome', 'totalAssets', 'totalLiabilities', 'totalEquity', 'totalLiabilitiesAndEquity', 'asOfDate');
+    }
+    // In LoanManager/ReportController.php
+
+ /**
+  * Display a loan aging analysis report for the manager.
+  */
+ public function agingAnalysis()
+    {
+        $data = $this->getAgingAnalysisData();
+        return view('loan-manager.reports.aging-analysis', $data);
+    }
+
+    /**
+     * Generate a PDF download of the aging analysis report.
+     */
+    public function downloadAgingAnalysis()
+    {
+        $data = $this->getAgingAnalysisData();
+        $pdf = Pdf::loadView('reports.pdf.aging-analysis', $data)->setPaper('a4', 'landscape');
+        return $pdf->stream('loan-aging-analysis-'.now()->format('Y-m-d').'.pdf');
+    }
+
+    /**
+     * Private helper to get the aging analysis data.
+     */
+    private function getAgingAnalysisData()
+    {
+        $managerId = Auth::id();
+        $activeLoans = Loan::where('loan_manager_id', $managerId)
+                           ->where('status', '!=', 'paid')
+                           ->with('client', 'payments', 'guarantors')
+                           ->get();
+
+        $analyzedLoans = [];
+        foreach ($activeLoans as $loan) {
+            $principal = $loan->principal_amount;
+            $totalInterest = $principal * ($loan->interest_rate / 100);
+            $totalRepayable = $principal + $totalInterest;
+            $term = $loan->term > 0 ? $loan->term : 1;
+            $paymentPerPeriod = $totalRepayable / $term;
+            $startDate = Carbon::parse($loan->start_date);
+            $today = Carbon::today();
+
+            $periodsPassed = 0;
+            switch ($loan->repayment_frequency) {
+                case 'Daily':   $periodsPassed = $startDate->diffInDays($today);   break;
+                case 'Weekly':  $periodsPassed = $startDate->diffInWeeks($today);  break;
+                default:        $periodsPassed = $startDate->diffInMonths($today); break;
+            }
+            $periodsPassed = min($periodsPassed, $term);
+            
+            $expectedPaid = $paymentPerPeriod * $periodsPassed;
+            $actualPaid = $loan->payments->sum('amount_paid');
+            
+            $arrears = max(0, $expectedPaid - $actualPaid);
+            $daysMissed = 0;
+            if ($arrears > 0) {
+                $firstUnpaidPeriod = floor($actualPaid / $paymentPerPeriod) + 1;
+                $firstMissedDueDate = $startDate->copy();
+                 switch ($loan->repayment_frequency) {
+                    case 'Daily':   $firstMissedDueDate->addDays($firstUnpaidPeriod);   break;
+                    case 'Weekly':  $firstMissedDueDate->addWeeks($firstUnpaidPeriod);  break;
+                    default:        $firstMissedDueDate->addMonths($firstUnpaidPeriod); break;
+                }
+                if($today->isAfter($firstMissedDueDate)) {
+                    $daysMissed = $firstMissedDueDate->diffInDays($today);
+                }
+            }
+
+            $analyzedLoans[] = (object)[
+                'loan' => $loan,
+                'balance' => $totalRepayable - $actualPaid,
+                'total_arrears' => $arrears,
+                'days_missed' => $daysMissed,
+            ];
+        }
+        return ['analyzedLoans' => $analyzedLoans];
     }
 }
