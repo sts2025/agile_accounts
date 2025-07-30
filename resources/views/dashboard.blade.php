@@ -18,7 +18,6 @@
         <div class="row">
             ```
 
-
     
     <div class="row">
         <div class="col-md-4 mb-4">
@@ -56,4 +55,5 @@
     <a href="{{ route('manager.reports.profit-and-loss') }}" class="btn btn-lg btn-info">View P&L Statement</a>
     <a href="{{ route('manager.reports.balance-sheet') }}" class="btn btn-lg btn-info">View Balance Sheet</a>
     <a href="{{ route('manager.reports.aging-analysis') }}" class="btn btn-lg btn-warning">Loan Aging Report</a>
+    <a href="{{ route('manager.reports.daily-report') }}" class="btn btn-lg btn-success">View Daily Report</a>
 @endsection

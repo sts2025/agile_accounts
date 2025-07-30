@@ -19,7 +19,7 @@ public function index()
         $totalLoanedAmount = $activeLoans->sum('principal_amount');
         $latestMessage = \App\Models\BroadcastMessage::latest()->first();
 
-        return view('dashboard', [
+        return view('loan-manager.dashboard', [
             'clientCount' => $clientCount,
             'activeLoanCount' => $activeLoanCount,
             'totalLoanedAmount' => $totalLoanedAmount,

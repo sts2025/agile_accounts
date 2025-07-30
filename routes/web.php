@@ -14,7 +14,7 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\LoanManager\ReportController as LoanManagerReportController;
 use App\Http\Controllers\Admin\BroadcastMessageController;
-
+use Illuminate\Support\Facades\Artisan;
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -72,6 +72,10 @@ Route::post('/payments/{payment}/edit/confirm', [PaymentController::class, 'conf
 // For the Loan Agreement PDF
 Route::get('/loans/{loan}/agreement', [LoanController::class, 'downloadLoanAgreement'])->name('loans.agreement.pdf');
 
+// For the manager's Daily Report
+Route::get('/dashboard/reports/daily-report', [LoanManagerReportController::class, 'dailyReport'])->name('manager.reports.daily-report');
+Route::get('/dashboard/reports/daily-report/pdf', [LoanManagerReportController::class, 'downloadDailyReport'])->name('manager.reports.daily-report.pdf');
+
 });
 
 
@@ -91,6 +95,22 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
 // Routes for editing and updating a payment
     Route::get('/payments/{payment}/edit', [PaymentController::class, 'edit'])->name('payments.edit');
     Route::put('/payments/{payment}', [PaymentController::class, 'update'])->name('payments.update');
+
+
+
+// Add this entire block at the bottom of the file
+Route::get('/clear-application-cache', function () {
+    // You can change 'MySecretKey123' to any random string you want
+    // This prevents others from accessing this URL.
+    if (request()->query('key') !== 'MySecretKey123') {
+        abort(403, 'Unauthorized action.');
+    }
+
+    // This command clears all of Laravel's caches: config, route, view, etc.
+    Artisan::call('optimize:clear');
+
+    return "Application cache cleared successfully!";
+});
 
 });
 
