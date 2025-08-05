@@ -16,6 +16,8 @@ class ChartOfAccountsSeeder extends Seeder
         $accounts = [
             // Assets (Financial Assets, as you specified)
             ['name' => 'Cash on Hand', 'type' => 'Asset'],
+
+            ['name' => 'Cash at Bank', 'type' => 'Asset'],
             ['name' => 'Loans Receivable', 'type' => 'Asset'],
             ['name' => 'Interest Receivable', 'type' => 'Asset'],
 
@@ -24,6 +26,8 @@ class ChartOfAccountsSeeder extends Seeder
             
             // Equity
             ['name' => 'Owner\'s Equity', 'type' => 'Equity'],
+
+            ['name' => 'Inter-branch Transfers', 'type' => 'Equity'],
 
             // Income
             ['name' => 'Interest Income', 'type' => 'Income'],

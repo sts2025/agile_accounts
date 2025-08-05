@@ -1,11 +1,16 @@
-@extends('layouts.app')
+@extends('layouts.manager')
 
 @section('title', 'My Loans')
 
 @section('content')
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>My Loans</h1>
-        <a href="{{ route('loans.create') }}" class="btn btn-primary">Create New Loan</a>
+        {{-- The title is now simply "Loans" --}}
+        <h1>Loans</h1>
+        <div>
+            {{-- We add a button to manage clients from here --}}
+            <a href="{{ route('clients.index') }}" class="btn btn-secondary">Manage Clients</a>
+            <a href="{{ route('loans.create') }}" class="btn btn-primary">Create New Loan</a>
+        </div>
     </div>
     
     @if (session('status'))
@@ -34,7 +39,8 @@
                         <th>Client Name</th>
                         <th>Principal Amount (UGX)</th>
                         <th>Interest Rate (%)</th>
-                        <th>Term (Months)</th>
+                        <th>Term</th>
+                        <th>Frequency</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
@@ -42,10 +48,16 @@
                 <tbody>
                     @forelse ($loans as $loan)
                         <tr>
-                            <td>{{ $loan->client->name ?? 'Client Not Found' }}</td>
-                            <td>{{ number_format($loan->principal_amount, 2) }}</td>
+                            <td>
+                                {{-- We now link to the client's edit page from here --}}
+                                <a href="{{ route('clients.edit', $loan->client->id) }}">{{ $loan->client->name ?? 'N/A' }}</a>
+                                <br>
+                                <small class="text-muted">{{ $loan->client->phone_number ?? '' }}</small>
+                            </td>
+                            <td>{{ number_format($loan->principal_amount, 0) }}</td>
                             <td>{{ $loan->interest_rate }}%</td>
                             <td>{{ $loan->term }}</td>
+                            <td>{{ $loan->repayment_frequency }}</td>
                             <td>
                                 @php
                                     $badgeColor = 'bg-secondary';
@@ -53,7 +65,6 @@
                                         case 'active': $badgeColor = 'bg-primary'; break;
                                         case 'paid': $badgeColor = 'bg-success'; break;
                                         case 'defaulted': $badgeColor = 'bg-danger'; break;
-                                        case 'pending': $badgeColor = 'bg-warning text-dark'; break;
                                     }
                                 @endphp
                                 <span class="badge {{ $badgeColor }}">{{ ucfirst($loan->status) }}</span>
@@ -64,13 +75,13 @@
                                 <form method="POST" action="{{ route('loans.destroy', $loan->id) }}" style="display:inline;">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to permanently delete this loan and all its history? This action cannot be undone.');">Delete</button>
+                                    <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure?');">Delete</button>
                                 </form>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="text-center">No loans match your search or you have not created any loans yet.</td>
+                            <td colspan="7" class="text-center">No loans found.</td>
                         </tr>
                     @endforelse
                 </tbody>

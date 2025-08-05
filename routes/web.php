@@ -15,6 +15,14 @@ use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\LoanManager\ReportController as LoanManagerReportController;
 use App\Http\Controllers\Admin\BroadcastMessageController;
 use Illuminate\Support\Facades\Artisan;
+use App\Http\Controllers\LoanManager\CashTransferController;
+use App\Http\Controllers\LoanManager\ExpenseController;
+use App\Http\Controllers\LoanManager\BankDepositController;
+
+
+
+
+
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -46,7 +54,7 @@ Route::post('reset-password', [PasswordResetController::class, 'reset'])->name('
 
 // --- PROTECTED LOAN MANAGER ROUTES ---
 // For regular, authenticated users (Loan Managers)
-Route::middleware(['auth'])->group(function () {
+     Route::middleware(['auth'])->group(function () {
     
     // Loan Manager's Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
@@ -75,7 +83,19 @@ Route::get('/loans/{loan}/agreement', [LoanController::class, 'downloadLoanAgree
 // For the manager's Daily Report
 Route::get('/dashboard/reports/daily-report', [LoanManagerReportController::class, 'dailyReport'])->name('manager.reports.daily-report');
 Route::get('/dashboard/reports/daily-report/pdf', [LoanManagerReportController::class, 'downloadDailyReport'])->name('manager.reports.daily-report.pdf');
+// For Cash Transfers
+Route::post('/cash-transfers', [CashTransferController::class, 'store'])->name('cash-transfers.store');
+Route::get('/cash-transfers', [CashTransferController::class, 'index'])->name('cash-transfers.index');
+Route::get('/cash-transfers/pdf', [CashTransferController::class, 'downloadPdf'])->name('cash-transfers.pdf');
+ // For viewing and printing expenses
+Route::post('/expenses', [ExpenseController::class, 'store'])->name('expenses.store');
+Route::get('/expenses', [ExpenseController::class, 'index'])->name('expenses.index');
+Route::get('/expenses/pdf', [ExpenseController::class, 'downloadPdf'])->name('expenses.pdf');
 
+// In routes/web.php, inside the auth middleware group   
+Route::post('/banking', [BankDepositController::class, 'store'])->name('banking.store');   
+Route::get('/banking', [BankDepositController::class, 'index'])->name('banking.index');
+Route::get('/banking/pdf', [BankDepositController::class, 'downloadPdf'])->name('banking.pdf');
 });
 
 
@@ -95,7 +115,6 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
 // Routes for editing and updating a payment
     Route::get('/payments/{payment}/edit', [PaymentController::class, 'edit'])->name('payments.edit');
     Route::put('/payments/{payment}', [PaymentController::class, 'update'])->name('payments.update');
-
 
 
 // Add this entire block at the bottom of the file

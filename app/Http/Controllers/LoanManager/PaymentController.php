@@ -49,8 +49,7 @@ class PaymentController extends Controller
         $payment->loan->save();
     }
 
-    return redirect()->route('loans.show', $validatedData['loan_id'])
-                     ->with('status', 'Payment recorded successfully! Receipt No: ' . $receiptNumber);
+   return redirect()->route('payments.receipt', $payment->id);
 }
 
     /**

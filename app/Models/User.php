@@ -64,4 +64,18 @@ class User extends Authenticatable
     {
         return $this->hasMany(Loan::class, 'loan_manager_id');
     }
+
+    public function expenses()
+{
+    return $this->hasMany(Expense::class, 'loan_manager_id');
+}
+
+public function cashTransfers()
+{
+    return $this->hasMany(CashTransfer::class, 'loan_manager_id');
+}
+public function bankDeposits()
+{
+    return $this->hasMany(BankDeposit::class, 'loan_manager_id');
+}
 }

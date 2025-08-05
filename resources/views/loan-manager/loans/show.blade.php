@@ -3,7 +3,6 @@
 @section('title', 'Loan Details')
 
 @section('content')
-    {{-- This check prevents an error if the loan object is not found --}}
     @if($loan)
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h1>Loan Details</h1>

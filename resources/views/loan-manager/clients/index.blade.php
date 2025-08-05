@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.manager')
 
 @section('title', 'My Clients')
 
@@ -7,7 +7,7 @@
         <h1>My Clients</h1>
         <a href="{{ route('clients.create') }}" class="btn btn-primary">Add New Client</a>
     </div>
-    
+
     @if (session('status'))
         <div class="alert alert-success">
             {{ session('status') }}
@@ -34,7 +34,7 @@
                         <th>Name</th>
                         <th>Phone Number</th>
                         <th>Address</th>
-                        <th>Occupation</th>
+                        <th>Business / Occupation</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -50,13 +50,13 @@
                                 <form method="POST" action="{{ route('clients.destroy', $client->id) }}" style="display:inline;">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this client?');">Delete</button>
+                                    <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure?');">Delete</button>
                                 </form>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="text-center">No clients match your search or you have not added any clients yet.</td>
+                            <td colspan="5" class="text-center">No clients found.</td>
                         </tr>
                     @endforelse
                 </tbody>
