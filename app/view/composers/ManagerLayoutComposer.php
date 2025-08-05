@@ -8,25 +8,32 @@ use App\Models\Account;
 
 class ManagerLayoutComposer
 {
-    public function compose(View $view)
+    public function compose(View $view): void
     {
-        $cashOnHand = 0;
-        if (Auth::check() && Auth::user()->user_type === 'loan_manager') {
-            $managerId = Auth::id();
-            $cashAccount = Account::where('name', 'Cash on Hand')->first();
-
-            if ($cashAccount) {
-                $debits = $cashAccount->generalLedgerTransactions()
-                    ->whereHas('loan', fn($q) => $q->where('loan_manager_id', $managerId))
-                    ->sum('debit');
-
-                $credits = $cashAccount->generalLedgerTransactions()
-                    ->whereHas('loan', fn($q) => $q->where('loan_manager_id', $managerId))
-                    ->sum('credit');
-
-                $cashOnHand = $debits - $credits;
-            }
-        }
+        $cashOnHand = $this->calculateCashOnHand();
         $view->with('cashOnHand', $cashOnHand);
+    }
+
+    protected function calculateCashOnHand(): float
+    {
+        if (!Auth::check() || Auth::user()->user_type !== 'loan_manager') {
+            return 0;
+        }
+
+        $cashAccount = Account::where('name', 'Cash on Hand')->first();
+        if (!$cashAccount) {
+            return 0;
+        }
+
+        $managerId = Auth::id();
+        $debits = $cashAccount->generalLedgerTransactions()
+            ->whereHas('loan', fn($q) => $q->where('loan_manager_id', $managerId))
+            ->sum('debit');
+
+        $credits = $cashAccount->generalLedgerTransactions()
+            ->whereHas('loan', fn($q) => $q->where('loan_manager_id', $managerId))
+            ->sum('credit');
+
+        return $debits - $credits;
     }
 }
