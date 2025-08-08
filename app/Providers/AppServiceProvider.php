@@ -9,6 +9,6 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void { /* ... */ }
     public function boot(): void
     {
-        View::composer('layouts.manager', ManagerLayoutComposer::class);
+        View::composer('layouts.manager',ManagerLayoutComposer::class);
     }
 }

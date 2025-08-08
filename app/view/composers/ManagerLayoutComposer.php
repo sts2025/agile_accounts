@@ -4,10 +4,8 @@ use Illuminate\View\View;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Account;
 
-class ManagerLayoutComposer
-{
-    public function compose(View $view)
-    {
+class ManagerLayoutComposer {
+    public function compose(View $view) {
         $cashOnHand = 0;
         if (Auth::check() && Auth::user()->user_type === 'loan_manager') {
             $managerId = Auth::id();
