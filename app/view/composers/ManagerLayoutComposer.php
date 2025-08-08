@@ -1,5 +1,5 @@
 <?php
-namespace App\View\Composers;
+namespace App\View\composers;
 use Illuminate\View\View;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Account;
