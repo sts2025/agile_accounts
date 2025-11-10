@@ -3,76 +3,128 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\User; // We need this to interact with the User model
+use App\Models\User;
+use App\Models\LoanManager; 
 use Illuminate\Http\Request;
-use App\Models\Client; // <-- Add this
-use App\Models\Loan;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Session;
 
 class AdminController extends Controller
 {
     /**
-     * Job #1: Show the admin dashboard and list inactive managers.
+     * Display the Admin dashboard.
      */
-     public function index()
+    public function index()
     {
-        // --- Fetch Stats ---
-        $loanManagerCount = User::where('user_type', 'loan_manager')->count();
-        $clientCount = Client::count();
-        $totalLoans = Loan::count();
-        $totalLoanedAmount = Loan::sum('principal_amount');
-
-        // --- Fetch Manager List (this part stays the same) ---
-        $loanManagers = User::where('user_type', 'loan_manager')
-                            ->with('loanManager')
-                            ->get()
-                            ->sortBy(function($user) {
-                                return $user->loanManager->is_active;
-                            });
-
-        // --- Pass all data to the view ---
+        $managers = User::where('user_type', 'loan_manager')->with('loanManager')->get();
+        $totalLoanedAmount = \App\Models\Loan::sum('principal_amount') ?? 0;
+        $loanManagerCount = $managers->count();
+        $clientCount = \App\Models\Client::count() ?? 0;
+        $totalLoans = \App\Models\Loan::count() ?? 0;
+        
         return view('admin.dashboard', [
-            'loanManagers' => $loanManagers,
+            'managers' => $managers,
+            'totalLoanedAmount' => $totalLoanedAmount,
             'loanManagerCount' => $loanManagerCount,
             'clientCount' => $clientCount,
             'totalLoans' => $totalLoans,
-            'totalLoanedAmount' => $totalLoanedAmount,
         ]);
     }
 
     /**
-     * Job #2: Activate a specific Loan Manager's account.
+     * Update settings for a loan manager (Activate/Suspend, Currency, Phone).
      */
-    public function activate(User $manager)
+    public function updateSettings(User $manager, Request $request)
     {
-        // This part checks if the user is a loan manager.
-        if ($manager->user_type === 'loan_manager' && $manager->loanManager) {
-            
-            // It finds their profile, sets is_active to true, and saves the change.
-            $manager->loanManager->is_active = true;
-            $manager->loanManager->save();
+        $validated = $request->validate([
+            'is_active' => 'required|boolean',
+            'currency_symbol' => 'required|string|in:UGX,RWF',
+            'support_phone' => 'required|string|max:20',
+        ]);
 
-            // Finally, it sends you back to the dashboard with a success message.
-            return redirect()->route('admin.dashboard')->with('status', 'Loan Manager has been activated successfully!');
+        $loanManagerProfile = $manager->loanManager;
+        if (!$loanManagerProfile) {
+            return back()->with('error', 'Loan Manager profile not found for this user.');
         }
 
-        // This is a fallback in case something goes wrong.
-        return redirect()->route('admin.dashboard')->with('error', 'Could not activate this user.');
+        $loanManagerProfile->update($validated);
+
+        $status = $validated['is_active'] ? 'activated' : 'suspended';
+        return back()->with('status', 'Manager ' . $manager->name . ' has been ' . $status . ' and settings saved.');
     }
 
-    public function suspend(User $manager)
+    /**
+     * ✅ Activate a loan manager.
+     */
+    public function activate($managerId)
     {
-        // Check if the user is actually a loan manager and has a profile
-        if ($manager->user_type === 'loan_manager' && $manager->loanManager) {
-            
-            // Set the is_active flag to false
-            $manager->loanManager->is_active = false;
-            $manager->loanManager->save();
+        $manager = User::findOrFail($managerId);
 
-            // Redirect back to the admin dashboard with a success message
-            return redirect()->route('admin.dashboard')->with('status', 'Loan Manager has been suspended successfully!');
+        // Check if it’s a loan manager
+        if ($manager->user_type !== 'loan_manager') {
+            return back()->with('error', 'You can only activate loan managers.');
         }
 
-        // Redirect back with an error if something went wrong
-        return redirect()->route('admin.dashboard')->with('error', 'Could not suspend this user.');
+        $manager->is_active = true;
+        $manager->save();
+
+        if ($manager->loanManager) {
+            $manager->loanManager->update(['is_active' => true]);
+        }
+
+        return back()->with('success', 'Manager ' . $manager->name . ' activated successfully.');
+    }
+
+    /**
+     * ✅ Suspend a loan manager.
+     */
+    public function suspend($managerId)
+    {
+        $manager = User::findOrFail($managerId);
+
+        if ($manager->user_type !== 'loan_manager') {
+            return back()->with('error', 'You can only suspend loan managers.');
+        }
+
+        $manager->is_active = false;
+        $manager->save();
+
+        if ($manager->loanManager) {
+            $manager->loanManager->update(['is_active' => false]);
+        }
+
+        return back()->with('success', 'Manager ' . $manager->name . ' suspended successfully.');
+    }
+
+    /**
+     * Impersonate (Login As) a loan manager.
+     */
+    public function impersonate(User $manager)
+    {
+        // Security Check: Admin can't impersonate another Admin
+        if ($manager->user_type === 'admin') {
+             return back()->with('error', 'Cannot impersonate another admin.');
+        }
+        
+        Session::put('original_admin_id', Auth::id());
+        Auth::login($manager);
+        return redirect()->route('dashboard')->with('status', 'Logged in as ' . $manager->name);
+    }
+
+    /**
+     * Stop impersonating.
+     */
+    public function stopImpersonate()
+    {
+        $originalAdminId = Session::pull('original_admin_id');
+        if (!$originalAdminId) {
+            return redirect()->route('login');
+        }
+        $originalAdmin = User::find($originalAdminId);
+        if ($originalAdmin) {
+            Auth::login($originalAdmin);
+            return redirect()->route('admin.dashboard')->with('status', 'Logged back in as Admin.');
+        }
+        return redirect()->route('login');
     }
 }

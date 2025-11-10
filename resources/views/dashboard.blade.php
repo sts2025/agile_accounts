@@ -45,6 +45,19 @@
             </div>
         </div>
     </div>
+    <hr>
+
+<h3>Quick Actions</h3>
+<div class="row mb-4">
+    <div class="col-md-12">
+        <!-- NEW BUTTONS - CONNECTED TO EXISTING/MODIFIED ROUTES -->
+        <a href="{{ route('payables.create') }}" class="btn btn-lg btn-primary mb-2">Add Payable / Receivable</a>
+        <a href="{{ route('banking.create') }}" class="btn btn-lg btn-primary mb-2">Add Banking</a>
+        <a href="{{ route('expenses.create') }}" class="btn btn-lg btn-primary mb-2">Add Expenses</a>
+        <a href="{{ route('clients.ledger.global') }}" class="btn btn-lg btn-info mb-2">View Client Ledger</a>
+        <a href="{{ route('loans.agreement.print') }}" class="btn btn-lg btn-success mb-2">Print Loan Agreement</a>
+    </div>
+</div>
     
     <hr>
 

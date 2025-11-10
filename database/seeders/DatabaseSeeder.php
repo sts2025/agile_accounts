@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             ChartOfAccountsSeeder::class,
         ]);
 
+         $this->call(ExpenseCategorySeeder::class);
         // You can add calls to other seeders here in the future
     }
    

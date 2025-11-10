@@ -1,129 +1,381 @@
+<?php
+// Note: Assumes variables like $totalClients, $chartData, $reportDate, etc., 
+// are correctly passed by the DashboardController.
+$currency = \App\Models\LoanManager::getCurrency();
+?>
 @extends('layouts.manager')
+@section('title', 'Loan Manager Dashboard')
 
-@section('title', 'Dashboard')
+@push('styles')
+    <style>
+        .icon-lg { font-size: 2.5rem; opacity: 0.8; }
+        .quick-actions .btn {
+            margin-bottom: 10px;
+            margin-right: 5px;
+        }
+    </style>
+@endpush
 
 @section('content')
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Dashboard</h1>
+        <div class="btn-group" role="group">
+            <a href="{{ route('clients.create') }}" class="btn btn-primary">
+                <i class="fas fa-user-plus me-1"></i> Add New Client
+            </a>
+            <a href="{{ route('loans.create') }}" class="btn btn-success">
+                <i class="fas fa-hand-holding-usd me-1"></i> Create New Loan
+            </a>
+            <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#recordPaymentModal">
+                <i class="fas fa-dollar-sign me-1"></i> Record Payment
+            </button>
+        </div>
+    </div>
+
     <div class="row">
-        {{-- Left Column --}}
-        <div class="col-lg-4">
-            <div class="card mb-4">
-                <div class="card-header">
-                    Date: {{ now()->format('d-m-Y') }}
-                </div>
+        {{-- Total Clients --}}
+        <div class="col-xl-4 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
                 <div class="card-body">
-                    <h5 class="card-title">Cash at Hand</h5>
-                    <p class="card-text fs-4 fw-bold">UGX {{ number_format($cashOnHand, 0) }}</p>
-                </div>
-                <div class="card-footer">
-                    <button class="btn btn-success w-100">Send Report</button>
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Clients</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ $totalClients ?? 0 }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-users fa-2x text-gray-300 icon-lg"></i>
+                        </div>
+                    </div>
                 </div>
             </div>
+        </div>
+        {{-- Active Loans --}}
+        <div class="col-xl-4 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Active Loans</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ $activeLoansCount ?? 0 }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-dollar-sign fa-2x text-gray-300 icon-lg"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {{-- Total Loaned Amount (CURRENCY FIX) --}}
+        <div class="col-xl-4 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Total Loaned Amount</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ $currency }} {{ number_format($totalLoanedAmount ?? 0, 0) }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-piggy-bank fa-2x text-gray-300 icon-lg"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-            {{-- Admin Announcement Card --}}
-            @if($latestMessage)
-                <div class="alert alert-info">
-                    <h5 class="alert-heading">{{ $latestMessage->title }}</h5>
-                    <p>{{ $latestMessage->body }}</p>
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Quick Actions</h6>
+        </div>
+        <div class="card-body quick-actions">
+            
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addPayableReceivableModal">
+                Add Payable / Receivable
+            </button>
+            <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#addBankingModal">
+                Add Banking
+            </button>
+            <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
+                Add Expenses
+            </button>
+            
+            <a href="{{ route('clients.index') }}" class="btn btn-success">View Client List</a>
+            <a href="{{ route('loans.index') }}" class="btn btn-secondary">View Loan List</a>
+            <a href="{{ route('reports.print-forms') }}" class="btn btn-dark">Print Forms</a>
+            <a href="{{ route('reports.general-ledger') }}" class="btn btn-warning">
+                View General Ledger
+            </a>
+
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-xl-8 col-lg-7">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Loans vs. Payments (Last 30 Days)</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-area">
+                        <canvas id="loanVsPaymentChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-4 col-lg-5">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Daily Report ({{ $reportDate->format('d M, Y') }})</h6>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="{{ route('reports.daily') }}" class="d-flex mb-3">
+                        <input type="date" name="date" class="form-control me-2" value="{{ $reportDate->format('Y-m-d') }}">
+                        <button type="submit" class="btn btn-secondary">Go</button>
+                    </form>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Opening Balance:</span>
+                        <strong>{{ $currency }} {{ number_format($openingBalance, 0) }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2 text-success">
+                        <span>Payments Received:</span>
+                        <strong>+ {{ $currency }} {{ number_format($totalPaidCash, 0) }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2 text-danger">
+                        <span>Loans Given:</span>
+                        <strong>- {{ $currency }} {{ number_format($totalLoanGiven, 0) }}</strong>
+                    </div>
                     <hr>
-                    <p class="mb-0"><small>Posted on: {{ $latestMessage->created_at->format('d F, Y') }}</small></p>
-                </div>
-            @endif
-        </div>
-
-        {{-- Right Column --}}
-        <div class="col-lg-8">
-            <div class="card mb-4">
-                <div class="card-header"><h5 class="mb-0">Quick Actions</h5></div>
-                <div class="card-body d-flex flex-wrap gap-2">
-                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#cashTransferModal">Add Payable / Receivable</button>
-                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addBankingModal">Add Banking</button>
-                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addExpenseModal">Add Expenses</button>
-                    <a href="{{ route('manager.reports.daily-report') }}" class="btn btn-success">Daily Report</a>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Transactions for {{ \Carbon\Carbon::parse($reportDate)->format('d F, Y') }}</h5>
-                    <a href="{{ route('manager.reports.daily-report.pdf', ['date' => $reportDate]) }}" class="btn btn-outline-secondary btn-sm" target="_blank">Print</a>
-                </div>
-                <div class="card-body">
-                    <table class="table table-bordered table-sm">
-                        <thead>
-                            <tr>
-                                <th colspan="2">Date: {{ \Carbon\Carbon::parse($reportDate)->format('d-m-Y') }}</th>
-                                <th>No of Loans Given: {{ $loansGiven->count() }}</th>
-                                <th>Loan Given: {{ number_format($totalLoanGiven, 0) }}</th>
-                            </tr>
-                            <tr>
-                                <th colspan="2">Clients Paid: {{ $paymentsReceived->count() }}</th>
-                                <th colspan="2">Total Loan Paid Cash: {{ number_format($totalPaidCash, 0) }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr><td><strong>Transactions</strong></td><td><strong>Cash_in</strong></td><td><strong>Cash_out</strong></td><td><strong>Closing Stock</strong></td></tr>
-                            <tr><td>Opening Balance</td><td>{{ number_format($openingBalance, 0) }}</td><td></td><td></td></tr>
-                            <tr><td>Cash In</td><td>{{ number_format($totalPaidCash, 0) }}</td><td></td><td></td></tr>
-                            <tr><td>Cash Out</td><td></td><td>{{ number_format($totalLoanGiven, 0) }}</td><td></td></tr>
-                            <tr class="table-light fw-bold">
-                                <td colspan="3">Closing Stock</td>
-                                <td>{{ number_format($closingStock, 0) }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <div class="d-flex justify-content-between fw-bold h5">
+                        <span>Closing Stock:</span>
+                        <strong>{{ $currency }} {{ number_format($closingStock, 0) }}</strong>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+    
+    {{-- ****************************************************** --}}
+    {{-- MODAL DEFINITIONS (Should be pushed via @push('modals')) --}}
+    {{-- ****************************************************** --}}
+    
+    @push('modals')
+    
+        {{-- Record Payment Modal (CURRENCY FIX) --}}
+        <div class="modal fade" id="recordPaymentModal" tabindex="-1" aria-labelledby="recordPaymentModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="recordPaymentModalLabel">Record a Payment</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form action="{{ route('payments.store') }}" method="POST">
+                        @csrf
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="client_id_select" class="form-label">Client</label>
+                                <select class="form-select" id="client_id_select" name="client_id" required>
+                                    <option value="" selected disabled>Select a client</option>
+                                    @foreach($allClientsWithLoans as $client)
+                                        <option value="{{ $client->id }}">{{ $client->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="loan_id_select" class="form-label">Loan</label>
+                                <select class="form-select" id="loan_id_select" name="loan_id" required disabled>
+                                    <option value="" selected disabled>Select a client first</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="amount_paid" class="form-label">Amount Paid ({{ $currency }})</label>
+                                <input type="number" class="form-control" id="amount_paid" name="amount_paid" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="payment_date" class="form-label">Payment Date</label>
+                                <input type="date" class="form-control" id="payment_date" name="payment_date" value="{{ now()->toDateString() }}" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="payment_method" class="form-label">Payment Method</label>
+                                <select class="form-select" id="payment_method" name="payment_method">
+                                    <option value="Cash">Cash</option>
+                                    <option value="Bank Transfer">Bank Transfer</option>
+                                    <option value="Mobile Money">Mobile Money</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="payment_notes" class="form-label">Notes (Optional)</label>
+                                <textarea class="form-control" id="payment_notes" name="notes" rows="2"></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="submit" class="btn btn-primary">Save Payment</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        {{-- Add Banking Modal (CURRENCY FIX) --}}
+        <div class="modal fade" id="addBankingModal" tabindex="-1" aria-labelledby="addBankingModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="addBankingModalLabel">Add Bank Deposit / Withdrawal</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form action="{{ route('bank-transactions.store') }}" method="POST">
+                        @csrf
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="bank_description" class="form-label">Description</label>
+                                <input type="text" class="form-control" id="bank_description" name="description" placeholder="e.g., Cash Deposit to Bank" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="bank_type" class="form-label">Transaction Type</label>
+                                <select class="form-select" id="bank_type" name="type">
+                                    <option value="Deposit">Deposit (Cash to Bank)</option>
+                                    <option value="Withdrawal">Withdrawal (Bank to Cash)</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="bank_amount" class="form-label">Amount ({{ $currency }})</label>
+                                <input type="number" class="form-control" id="bank_amount" name="amount" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="bank_date" class="form-label">Transaction Date</label>
+                                <input type="date" class="form-control" id="bank_date" name="transaction_date" value="{{ now()->toDateString() }}" required>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="submit" class="btn btn-primary">Save Transaction</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        {{-- Add Expense Modal (CURRENCY FIX) --}}
+        <div class="modal fade" id="addExpenseModal" tabindex="-1" aria-labelledby="addExpenseModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="addExpenseModalLabel">Add Expense</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form action="{{ route('expenses.store') }}" method="POST">
+                        @csrf
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="expense_category_id" class="form-label">Expense Category</label>
+                                <select class="form-select" id="expense_category_id" name="expense_category_id" required>
+                                    <option value="" disabled selected>Select a category</option>
+                                    @foreach($expenseCategories as $category)
+                                        <option value="{{ $category->id }}">{{ $category->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="expense_amount" class="form-label">Amount ({{ $currency }})</label>
+                                <input type="number" class="form-control" id="expense_amount" name="amount" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="expense_date" class="form-label">Expense Date</label>
+                                <input type="date" class="form-control" id="expense_date" name="expense_date" value="{{ now()->toDateString() }}" required>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="submit" class="btn btn-primary">Save Expense</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        {{-- Add Payable / Receivable Modal (CURRENCY FIX) --}}
+        <div class="modal fade" id="addPayableReceivableModal" tabindex="-1" aria-labelledby="addPayableReceivableModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="addPayableReceivableModalLabel">Add Payable / Receivable</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <form action="{{ route('cash-transactions.store') }}" method="POST">
+                        @csrf
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="pr_description" class="form-label">Description</label>
+                                <input type="text" class="form-control" id="pr_description" name="description" placeholder="e.g., Rent for November" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="pr_type" class="form-label">Type</label>
+                                <select class="form-select" id="pr_type" name="type" required>
+                                    <option value="payable">Payable (Cash Out)</option>
+                                    <option value="receivable">Receivable (Cash In)</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="pr_amount" class="form-label">Amount ({{ $currency }})</label>
+                                <input type="number" class="form-control" id="pr_amount" name="amount" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="pr_date" class="form-label">Transaction Date</label>
+                                <input type="date" class="form-control" id="pr_date" name="transaction_date" value="{{ now()->toDateString() }}" required>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="submit" class="btn btn-primary">Save Transaction</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    @endpush
+
+    @push('scripts')
+        {{-- Chart.js Import (assuming you need this) --}}
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                // --- Chart Logic ---
+                // Ensure $chartData is available here for chart rendering
+
+                // --- Payment Dropdown Logic ---
+                const allClientsData = @json($allClientsWithLoans);
+                const clientLoansMap = {};
+                allClientsData.forEach(client => {
+                    clientLoansMap[client.id] = client.loans;
+                });
+
+                const clientSelect = document.getElementById('client_id_select');
+                const loanSelect = document.getElementById('loan_id_select');
+                const loanCurrencySymbol = '{{ $currency }}';
+
+                clientSelect.addEventListener('change', function() {
+                    const selectedClientId = this.value;
+                    loanSelect.innerHTML = '<option value="" selected disabled>Select a loan</option>';
+                    loanSelect.disabled = true;
+
+                    if (selectedClientId && clientLoansMap[selectedClientId]) {
+                        const loans = clientLoansMap[selectedClientId];
+                        loans.forEach(loan => {
+                            const option = document.createElement('option');
+                            option.value = loan.id;
+                            option.text = `Loan #${loan.id} - ${loanCurrencySymbol} ${parseInt(loan.principal_amount).toLocaleString()}`;
+                            loanSelect.appendChild(option);
+                        });
+                        loanSelect.disabled = false;
+                    }
+                });
+            });
+        </script>
+    @endpush
+
 @endsection
-
-@push('modals')
-    {{-- Add Expense Modal --}}
-    <div class="modal fade" id="addExpenseModal" tabindex="-1">
-        <div class="modal-dialog"><div class="modal-content">
-            <div class="modal-header"><h5 class="modal-title">Add New Expense</h5></div>
-            <form method="POST" action="{{ route('expenses.store') }}">
-                @csrf
-                <div class="modal-body">
-                    <div class="mb-3"><label class="form-label">Date</label><input type="date" class="form-control" name="expense_date" value="{{ now()->toDateString() }}" required></div>
-                    <div class="mb-3"><label class="form-label">Description</label><input type="text" class="form-control" name="description" placeholder="e.g., Transport, Lunch Allowance" required></div>
-                    <div class="mb-3"><label class="form-label">Amount (UGX)</label><input type="number" step="0.01" class="form-control" name="amount" required></div>
-                </div>
-                <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="submit" class="btn btn-primary">Save Expense</button></div>
-            </form>
-        </div></div>
-    </div>
-
-    {{-- Add Cash Transfer (Payable/Receivable) Modal --}}
-    <div class="modal fade" id="cashTransferModal" tabindex="-1">
-        <div class="modal-dialog"><div class="modal-content">
-            <div class="modal-header"><h5 class="modal-title">Record a Cash Transfer</h5></div>
-            <form method="POST" action="{{ route('cash-transfers.store') }}">
-                @csrf
-                <div class="modal-body">
-                    <div class="mb-3"><label class="form-label">Transaction Type</label><select class="form-select" name="type" required><option value="in">Cash In (Receivable)</option><option value="out">Cash Out (Payable)</option></select></div>
-                    <div class="mb-3"><label class="form-label">Date</label><input type="date" class="form-control" name="transaction_date" value="{{ now()->toDateString() }}" required></div>
-                    <div class="mb-3"><label class="form-label">Description</label><textarea class="form-control" name="description" rows="3" placeholder="e.g., Transfer from/to Head Office" required></textarea></div>
-                    <div class="mb-3"><label class="form-label">Amount (UGX)</label><input type="number" step="0.01" class="form-control" name="amount" required></div>
-                </div>
-                <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="submit" class="btn btn-primary">Save Transaction</button></div>
-            </form>
-        </div></div>
-    </div>
-
-    {{-- Add Banking Modal --}}
-    <div class="modal fade" id="addBankingModal" tabindex="-1">
-      <div class="modal-dialog"><div class="modal-content">
-          <div class="modal-header"><h5 class="modal-title">Record Bank Deposit</h5></div>
-          <form method="POST" action="{{ route('banking.store') }}">
-              @csrf
-              <div class="modal-body">
-                  <div class="mb-3"><label class="form-label">Date</label><input type="date" class="form-control" name="deposit_date" value="{{ now()->toDateString() }}" required></div>
-                  <div class="mb-3"><label class="form-label">Amount Deposited (UGX)</label><input type="number" step="0.01" class="form-control" name="amount" required></div>
-                  <div class="mb-3"><label class="form-label">Reference / Slip No. (Optional)</label><input type="text" class="form-control" name="reference_number"></div>
-              </div>
-              <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button><button type="submit" class="btn btn-primary">Save Deposit</button></div>
-          </form>
-      </div></div>
-    </div>
-@endpush

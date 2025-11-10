@@ -30,12 +30,15 @@
             font-size: 10px;
         }
         .details-container { width: 75%; float: left; }
+        .terms { font-size: 11px; text-align: justify; }
+        .terms p { margin-bottom: 10px; }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>LOAN AGREEMENT</h1>
-        <h2>Agile Accounts</h2>
+        {{-- *** 1. THE BUSINESS NAME FIX *** --}}
+        <h2>{{ $loanManager->business_name }}</h2>
     </div>
 
     <div class="section clearfix">
@@ -81,7 +84,6 @@
     </div>
     @endif
 
-    {{-- This is the restored Collateral Details section --}}
     @if($loan->collaterals->isNotEmpty())
     <div class="section">
         <h3>COLLATERAL DETAILS</h3>
@@ -94,8 +96,27 @@
         @endforeach
     </div>
     @endif
+
+    {{-- *** 2. THE "IMPROVEMENT" (Terms & Conditions) *** --}}
+    <div class="section terms">
+        <h3>TERMS AND CONDITIONS</h3>
+        <p>
+            <strong>1. AGREEMENT:</strong> This Loan Agreement ("Agreement") is made on {{ \Carbon\Carbon::parse($loan->start_date)->format('F d, Y') }} by and between
+            <strong>{{ $loanManager->business_name }}</strong> ("Lender") and <strong>{{ $loan->client->name }}</strong> ("Borrower").
+        </p>
+        <p>
+            <strong>2. REPAYMENT:</strong> The Borrower agrees to repay the Total Repayable Amount of <strong>UGX {{ number_format($totalRepayable, 0) }}</strong>
+            in {{ $loan->term }} {{ $loan->repayment_frequency }} installments as per the agreed-upon schedule.
+        </p>
+        <p>
+            <strong>3. DEFAULT:</strong> Failure to make a payment for more than seven (7) days after the due date will be considered a default. In the event of default, the Lender has the right to demand immediate full payment of the outstanding balance and may seize any collateral listed.
+        </p>
+        <p>
+            <strong>4. GOVERNING LAW:</strong> This Agreement shall be governed by and construed in accordance with the laws of Uganda.
+        </p>
+    </div>
     
-    {{-- This is the restored Signature section --}}
+    
     <div class="signature-section">
         <p>By signing below, all parties agree to the terms and conditions of this loan agreement.</p>
         
@@ -104,7 +125,6 @@
             <p class="signature-title">Borrower's Signature ({{ $loan->client->name }})</p>
         </div>
         
-        {{-- This now correctly creates a signature line for each guarantor --}}
         @foreach($loan->guarantors as $guarantor)
         <div class="signature-block">
             <div class="signature-line"></div>
@@ -112,9 +132,12 @@
         </div>
         @endforeach
         
+        {{-- *** 3. THE LENDER SIGNATURE FIX *** --}}
         <div class="signature-block">
             <div class="signature-line"></div>
-            <p class="signature-title">Approved By (Loan Officer)</p>
+            {{-- Assumes your LoanManager model has a 'user' relationship to get the name --}}
+            <p class="signature-title">Approved By: {{ $loanManager->user->name ?? 'Loan Officer' }}</p>
+            <p class="signature-title">(For {{ $loanManager->business_name }})</p>
         </div>
     </div>
 </body>

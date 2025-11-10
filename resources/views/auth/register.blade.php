@@ -15,6 +15,33 @@
                         <h4>Register as a Loan Manager</h4>
                     </div>
                     <div class="card-body">
+                        
+                        {{-- *********************************************** --}}
+                        {{-- *** THIS IS THE MISSING ERROR-HANDLING CODE *** --}}
+                        {{-- *********************************************** --}}
+
+                        @if (session('error'))
+                            <div class="alert alert-danger">
+                                {{ session('error') }}
+                            </div>
+                        @endif
+
+                        @if ($errors->any())
+                            <div class="alert alert-danger">
+                                <h5 class="alert-heading">Registration Failed</h5>
+                                <ul class="mb-0">
+                                    @foreach ($errors->all() as $error)
+                                        <li>{{ $error }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
+                        
+                        {{-- *********************************************** --}}
+                        {{-- *** END OF MISSING CODE *** --}}
+                        {{-- *********************************************** --}}
+
+
                         <form method="POST" action="{{ route('register.store') }}">
                             @csrf
 
@@ -70,7 +97,7 @@
                     </div>
                 </div>
                 <div class="text-center mt-3">
-                    <p>Already have an account? <a href="/login">Login here</a></p>
+                    <p>Already have an account? <a href="{{ route('login') }}">Login here</a></p>
                 </div>
             </div>
         </div>

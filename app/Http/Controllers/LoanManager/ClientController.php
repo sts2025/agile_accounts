@@ -10,108 +10,158 @@ use Illuminate\Validation\Rule;
 
 class ClientController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index(Request $request)
     {
-        // Start with the query that we know works
-        $query = Auth::user()->clients();
+        $query = Auth::user()->loanManager->clients();
 
-        // Check if a search term was submitted
-        // In index() method
-if ($search = $request->input('search')) {
-    $searchTerm = strtolower($search);
-    // The query now only searches the name column
-    $query->whereRaw('LOWER(name) LIKE ?', ["%{$searchTerm}%"]);
-}
-        
+        if ($search = $request->input('search')) {
+            $searchTerm = strtolower($search);
+            $query->whereRaw('LOWER(name) LIKE ?', ["%{$searchTerm}%"]);
+        }
 
-
-
-        // Now, execute the final query
         $clients = $query->latest()->get();
 
         return view('loan-manager.clients.index', compact('clients'));
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
     public function create()
     {
         return view('loan-manager.clients.create');
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
+        $managerId = Auth::user()->loanManager->id;
+
+        // --- NEW VALIDATION: Enforce uniqueness and required fields ---
         $validatedData = $request->validate([
             'name' => 'required|string|max:255',
-            //'email' => 'required|string|email|max:255|unique:clients',
-            'phone_number' => 'required|string|max:20',
-            'address' => 'nullable|string',
-            'business_occupation' => 'nullable|string|max:255',
+            
+            // Assuming national_id exists in your database structure for security
+            'national_id' => [
+                'nullable', // Changed to nullable based on typical forms, change to 'required' if mandatory
+                'string',
+                'max:20',
+                // Unique check: Must be unique among clients tied to THIS manager
+                Rule::unique('clients', 'national_id')->where('loan_manager_id', $managerId),
+            ],
+            
+            'phone_number' => [
+                'required',
+                'string',
+                'max:20',
+                // Unique check: Must be unique among clients tied to THIS manager
+                Rule::unique('clients', 'phone_number')->where('loan_manager_id', $managerId),
+            ],
+            'address' => 'required|string|max:255', // Changed to required based on your loan validation needs
+            'email' => 'nullable|email|max:255', // Added common fields
+            'date_of_birth' => 'nullable|date|before:today', // Added common fields
+            'occupation' => 'nullable|string|max:255', // Used 'occupation' based on standard schema
         ]);
 
-        Auth::user()->clients()->create($validatedData);
+        Auth::user()->loanManager->clients()->create($validatedData);
 
-        return redirect()->route('clients.index')->with('status', 'Client has been added successfully!');
+        return redirect()->route('clients.index')->with('success', 'New client added successfully!');
     }
 
-    /**
-     * Display the specified resource.
-     * We are not using this in our current design, but it's here for completeness.
-     */
-    public function show(Client $client)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
     public function edit(Client $client)
     {
-        if (Auth::id() !== $client->loan_manager_id) {
+        if (Auth::user()->loanManager->id !== $client->loan_manager_id) {
             abort(403);
         }
         return view('loan-manager.clients.edit', compact('client'));
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, Client $client)
     {
-        if (Auth::id() !== $client->loan_manager_id) {
+        if (Auth::user()->loanManager->id !== $client->loan_manager_id) {
             abort(403);
         }
 
+        $managerId = $client->loan_manager_id;
+
+        // --- NEW VALIDATION: Enforce uniqueness but ignore the current client's ID ---
         $validatedData = $request->validate([
             'name' => 'required|string|max:255',
-            //'email' => ['required', 'string', 'email', 'max:255', Rule::unique('clients')->ignore($client->id)],
-            'phone_number' => 'required|string|max:20',
-            'address' => 'nullable|string',
-            'business_occupation' => 'nullable|string|max:255',
+            
+            'national_id' => [
+                'nullable',
+                'string',
+                'max:20',
+                // Ignore the current client ID ($client->id) while checking uniqueness under this manager
+                Rule::unique('clients', 'national_id')
+                    ->ignore($client->id)
+                    ->where('loan_manager_id', $managerId),
+            ],
+            
+            'phone_number' => [
+                'required',
+                'string',
+                'max:20',
+                 // Ignore the current client ID ($client->id) while checking uniqueness under this manager
+                Rule::unique('clients', 'phone_number')
+                    ->ignore($client->id)
+                    ->where('loan_manager_id', $managerId),
+            ],
+            'address' => 'required|string|max:255',
+            'email' => 'nullable|email|max:255',
+            'date_of_birth' => 'nullable|date|before:today',
+            'occupation' => 'nullable|string|max:255',
         ]);
 
         $client->update($validatedData);
 
-        return redirect()->route('clients.index')->with('status', 'Client details have been updated successfully!');
+        return redirect()->route('clients.show', $client)->with('success', 'Client details updated successfully!');
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy(Client $client)
     {
-        if (Auth::id() !== $client->loan_manager_id) {
+        if (Auth::user()->loanManager->id !== $client->loan_manager_id) {
             abort(403);
         }
         $client->delete();
         return redirect()->route('clients.index')->with('status', 'Client has been deleted successfully!');
+    }
+
+    /**
+     * Display a printable ledger for a specific client.
+     */
+    public function showLedger(Client $client)
+    {
+        // Security check to ensure the client belongs to the logged-in manager
+        if ($client->loan_manager_id !== Auth::user()->loanManager->id) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $transactions = collect();
+
+        // Loop through each loan for the client
+        foreach ($client->loans()->with('payments')->get() as $loan) {
+            // Add the loan disbursement as a debit
+            // NOTE: Assumes $loan->total_interest is calculated via a helper or mutator
+            $totalInterest = $loan->principal_amount * ($loan->interest_rate / 100);
+            $transactions->push((object)[
+                'date' => $loan->start_date,
+                'description' => "Loan Disbursed (ID: {$loan->id})",
+                'debit' => $loan->principal_amount + $totalInterest, // Include interest in the total debit
+                'credit' => 0,
+            ]);
+
+            // Add all payments for that loan as credits
+            foreach ($loan->payments as $payment) {
+                $transactions->push((object)[
+                    'date' => $payment->payment_date,
+                    'description' => "Payment Received (Receipt: {$payment->id})",
+                    'debit' => 0,
+                    'credit' => $payment->amount_paid,
+                ]);
+            }
+        }
+
+        // Return the view with the client and sorted transactions
+        return view('loan-manager.clients.ledger', [
+            'client' => $client,
+            'transactions' => $transactions->sortBy('date'),
+        ]);
     }
 }

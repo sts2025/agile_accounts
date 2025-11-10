@@ -1,63 +1,109 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Admin Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body>
-    <div class="container mt-5">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1>Admin Dashboard</h1>
-            <form method="POST" action="{{ route('logout') }}">@csrf<button type="submit" class="btn btn-danger">Logout</button></form>
+@extends('layouts.app') {{-- <-- 1. FINAL FIX: Changed back to 'layouts.app' --}}
+
+@section('title', 'Admin Dashboard')
+
+@section('content')
+<div class="container-fluid"> {{-- <-- 2. FIX: Added container-fluid for correct padding --}}
+    
+    <h1 class="h3 mb-4 text-gray-800">Admin Panel</h1>
+
+    @if (session('status'))
+        <div class="alert alert-success">{{ session('status') }}</div>
+    @endif
+    
+    @if (session('error'))
+        <div class="alert alert-danger">{{ session('error') }}</div>
+    @endif
+
+    {{-- Admin Actions Section --}}
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h4 class="m-0 font-weight-bold text-primary">Manage Loan Managers</h4>
+            <p class="m-0 text-muted">Activate or suspend managers and set currency/support contacts.</p>
         </div>
-        @if (session('status'))<div class="alert alert-success">{{ session('status') }}</div>@endif
-        <div class="card mb-4">
-            <div class="card-header"><h4>Loan Managers Awaiting Activation</h4></div>
-            <div class="card-body">
-                <table class="table table-striped">
-                    <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Address</th><th class="text-center">Action</th></tr></thead>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Currency</th>
+                            <th>Support Phone</th>
+                            <th class="text-center" style="min-width: 350px;">Actions / Settings</th>
+                        </tr>
+                    </thead>
                     <tbody>
-                        @forelse ($loanManagers->where('loanManager.is_active', false) as $manager)
+                        @forelse ($managers as $manager)
+                            @php
+                                $loanManager = $manager->loanManager;
+                                $isActive = $loanManager && $loanManager->is_active;
+                            @endphp
                             <tr>
                                 <td>{{ $manager->name }}</td>
                                 <td>{{ $manager->email }}</td>
-                                <td>{{ $manager->loanManager->phone_number ?? 'N/A' }}</td>
-                                <td>{{ $manager->loanManager->address ?? 'N/A' }}</td>
+                                <td>
+                                    @if ($isActive)
+                                        <span class="badge bg-success">Active</span>
+                                    @else
+                                        <span class="badge bg-secondary">Inactive / Pending</span>
+                                    @endif
+                                </td>
+                                <td>{{ $loanManager->currency_symbol ?? 'N/A' }}</td>
+                                <td>{{ $loanManager->support_phone ?? 'N/A' }}</td>
+                                
+                                {{-- ACTIONS COLUMN --}}
                                 <td class="text-center">
-                                    <form method="POST" action="{{ route('admin.managers.activate', $manager->id) }}">@csrf<button type="submit" class="btn btn-success btn-sm">Activate</button></form>
+                                    @if ($isActive)
+                                        {{-- Actions for ACTIVE managers --}}
+                                        <a href="{{ route('admin.users.impersonate', $manager->id) }}" class="btn btn-info btn-sm me-2">Login As</a>
+
+                                        {{-- Suspend Button (GET request) --}}
+                                        <a href="{{ route('admin.managers.suspend', $manager->id) }}" 
+                                           class="btn btn-warning btn-sm"
+                                           onclick="return confirm('Are you sure you want to suspend this manager?');">
+                                            Suspend
+                                        </a>
+                                    @else
+                                        {{-- Activation Form --}}
+                                        <form method="POST" action="{{ route('admin.managers.update', $manager->id) }}" class="row g-1 align-items-center justify-content-center">
+                                            @csrf
+                                            
+                                            {{-- Hidden activation toggle --}}
+                                            <input type="hidden" name="is_active" value="1">
+                                            
+                                            {{-- Currency Dropdown --}}
+                                            <div class="col-3">
+                                                <select name="currency_symbol" class="form-select form-select-sm" required>
+                                                    <option value="" disabled selected>Currency</option>
+                                                    <option value="UGX">UGX</option>
+                                                    <option value="RWF">RWF</option>
+                                                </select>
+                                            </div>
+                                            
+                                            {{-- Support Phone Input --}}
+                                            <div class="col-4">
+                                                <input type="text" name="support_phone" class="form-control form-control-sm" placeholder="Support Phone" required>
+                                            </div>
+                                            
+                                            {{-- Activate Button --}}
+                                            <div class="col-3">
+                                                <button type="submit" class="btn btn-success btn-sm w-100">Activate</button>
+                                            </div>
+                                        </form>
+                                    @endif
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="5" class="text-center">No loan managers are currently awaiting activation.</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        <div class="card">
-            <div class="card-header"><h4>Active Loan Managers</h4></div>
-            <div class="card-body">
-                 <table class="table table-striped">
-                    <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Address</th><th class="text-center">Action</th></tr></thead>
-                    <tbody>
-                        @forelse ($loanManagers->where('loanManager.is_active', true) as $manager)
                             <tr>
-                                <td>{{ $manager->name }}</td>
-                                <td>{{ $manager->email }}</td>
-                                <td>{{ $manager->loanManager->phone_number ?? 'N/A' }}</td>
-                                <td>{{ $manager->loanManager->address ?? 'N/A' }}</td>
-                                <td class="text-center">
-                                    <form method="POST" action="{{ route('admin.managers.suspend', $manager->id) }}">@csrf<button type="submit" class="btn btn-warning btn-sm">Suspend</button></form>
-                                </td>
+                                <td colspan="6" class="text-center">No loan managers found.</td>
                             </tr>
-                        @empty
-                            <tr><td colspan="5" class="text-center">There are no active loan managers.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
-</body>
-</html>
+</div>
+@endsection

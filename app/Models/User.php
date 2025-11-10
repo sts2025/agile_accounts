@@ -2,80 +2,46 @@
 
 namespace App\Models;
 
-use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Lab404\Impersonate\Models\Impersonate;
+use App\Models\LoanManager;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable, Impersonate;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
     protected $fillable = [
         'name',
         'email',
         'password',
-        'user_type', // Ensure user_type is fillable
+        'user_type',
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var array<int, string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
     ];
 
+    public function isAdmin()
+    {
+        return $this->loanManager()->doesntExist();
+    }
+    
     /**
      * Get the loan manager profile associated with the user.
      */
-    public function loanManager()
+    public function loanManager(): HasOne
     {
         return $this->hasOne(LoanManager::class);
     }
-
-    /**
-     * Get the clients for the loan manager.
-     */
-    public function clients()
-    {
-        return $this->hasMany(Client::class, 'loan_manager_id');
-    }
-    
-    public function loans()
-    {
-        return $this->hasMany(Loan::class, 'loan_manager_id');
-    }
-
-    public function expenses()
-{
-    return $this->hasMany(Expense::class, 'loan_manager_id');
-}
-
-public function cashTransfers()
-{
-    return $this->hasMany(CashTransfer::class, 'loan_manager_id');
-}
-public function bankDeposits()
-{
-    return $this->hasMany(BankDeposit::class, 'loan_manager_id');
-}
 }

@@ -47,11 +47,19 @@
                             <td>{{ $client->business_occupation ?? 'N/A' }}</td>
                             <td>
                                 <a href="{{ route('clients.edit', $client->id) }}" class="btn btn-secondary btn-sm">Edit</a>
+
+                                {{-- ✅ New Ledger Button --}}
+                                <a href="{{ route('clients.ledger', $client->id) }}" class="btn btn-info btn-sm">Ledger</a>
+
                                 <form method="POST" action="{{ route('clients.destroy', $client->id) }}" style="display:inline;">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure?');">Delete</button>
+                                    <button type="button" class="btn btn-sm btn-danger confirm-delete-btn"
+                                     data-action="{{ route('clients.destroy', $client->id) }}"
+                                     data-bs-toggle="modal" data-bs-target="#confirmActionModal">Delete
+                                    </button>
                                 </form>
+                                
                             </td>
                         </tr>
                     @empty

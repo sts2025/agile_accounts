@@ -23,6 +23,10 @@ class GeneralLedgerTransaction extends Model
         'credit',
     ];
 
+    protected $casts = [
+        'transaction_date' => 'date', // <-- Add this line
+    ];
+
     /**
      * Get the account associated with the transaction.
      */

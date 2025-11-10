@@ -3,110 +3,102 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Account;
 use App\Models\LoanManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rules;
 
 class AuthController extends Controller
 {
-    /**
-     * Show the registration form.
-     */
-    public function create()
-    {
-        return view('auth.register');
-    }
+    public function showLoginForm() { return view('auth.login'); }
 
-    /**
-     * Handle a registration request.
-     */
-    public function store(Request $request)
-    {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8|confirmed',
-            'phone_number' => 'required|string|max:20',
-            'address' => 'required|string|max:255',
-        ]);
-
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'user_type' => 'loan_manager',
-        ]);
-
-        LoanManager::create([
-            'user_id' => $user->id,
-            'phone_number' => $request->phone_number,
-            'address' => $request->address,
-            'is_active' => false,
-        ]);
-
-        return redirect('/login')->with('status', 'Registration successful! Please wait for an Admin to activate your account.');
-    }
-
-    /**
-     * Show the login form.
-     */
-    public function showLoginForm()
-    {
-        return view('auth.login');
-    }
-
-    /**
-     * Handle user login.
-     * This version includes the Super Admin redirection.
-     */
     public function login(Request $request)
     {
         $credentials = $request->validate([
-            'email' => 'required|string|email',
-            'password' => 'required|string',
+            'email' => ['required', 'email'],
+            'password' => ['required'],
         ]);
-        
-        $user = User::where('email', $credentials['email'])->first();
 
-        if ($user && $user->user_type === 'loan_manager') {
-            $loanManager = $user->loanManager; 
-            if (!$loanManager || !$loanManager->is_active) {
-                return back()->withErrors([
-                    'email' => 'Your account is inactive. Please contact the Admin for activation on 0740859082.'
-                ])->onlyInput('email');
-            }
-        }
-        
         if (Auth::attempt($credentials)) {
             $request->session()->regenerate();
+            $user = Auth::user();
 
-            // Check the user's type and redirect them accordingly.
-            $authenticatedUser = Auth::user(); 
-
-            if ($authenticatedUser->user_type === 'super_admin') {
-                // If they are a super admin, send them to the admin dashboard route.
+            if ($user->user_type === 'admin') {
                 return redirect()->route('admin.dashboard');
-            } else {
-                // Otherwise, send them to the regular loan manager dashboard.
+            }
+
+            if ($user->user_type === 'loan_manager' && $user->loanManager && $user->loanManager->is_active) {
                 return redirect()->intended('dashboard');
             }
+
+            Auth::logout();
+            return back()->withErrors(['email' => 'Your account is not active or has been suspended. Please contact support.']);
         }
 
-        return back()->withErrors([
-            'email' => 'The provided credentials do not match our records.',
-        ])->onlyInput('email');
+        return back()->withErrors(['email' => 'The provided credentials do not match our records.']);
     }
 
-    /**
-     * Handle user logout (for web routes).
-     */
     public function logout(Request $request)
     {
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
-        return redirect('/');
+        return redirect('/login');
     }
+    
+    public function create() { return view('auth.register'); }
+
+    
+    public function store(Request $request)
+    {
+        $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
+            'phone_number' => ['required', 'string', 'max:20'],
+            'address' => ['required', 'string', 'max:255'],
+            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+        ]);
+
+        try {
+            $user = DB::transaction(function () use ($request) {
+                
+                $user = User::create([
+                    'name' => $request->name,
+                    'email' => $request->email,
+                    'password' => Hash::make($request->password),
+                    'user_type' => 'loan_manager',
+                ]);
+
+                $manager = $user->loanManager()->create([
+                    'company_name'      => $request->name, 
+                    'phone_number'      => $request->phone_number,
+                    'address'           => $request->address,
+                    'is_active'         => 0, 
+                    'currency_symbol'   => 'UGX', 
+                ]);
+
+                // *** THIS IS THE FIX: ***
+                // *** THE BROKEN FUNCTION CALL BELOW IS NOW REMOVED. ***
+                // $this->createDefaultAccountsForManager($manager); 
+
+                return $user;
+            });
+
+            return redirect()->route('login')->with('success', 'Registration successful! Your account is pending admin activation.');
+
+        } catch (\Exception $e) {
+            Log::error('REGISTRATION FAILED: ' . $e->getMessage());
+            return back()->withInput()->with('error', 'Registration failed due to a server error. Please try again.');
+        }
+    }
+
+    /**
+     * *** THIS IS THE FIX: ***
+     * *** THE ENTIRE BROKEN FUNCTION BELOW IS NOW REMOVED. ***
+     */
+    // private function createDefaultAccountsForManager(LoanManager $manager) { ... }
 }

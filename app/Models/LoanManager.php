@@ -4,10 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\User;
-use App\Models\Borrower;
-use App\Models\Loan;
-use App\Models\SubscriptionPayment;
+use Illuminate\Support\Facades\Auth;
+// *** NOTE: The 'HasMany' and 'Account' imports for the broken function are gone. ***
 
 class LoanManager extends Model
 {
@@ -19,29 +17,37 @@ class LoanManager extends Model
         'address',
         'is_active',
         'subscription_ends_at',
+        'company_name',
+        'company_phone',
+        'company_logo_path',
+        'currency_symbol', 
+        'support_phone',
     ];
 
-    // Relationship: A LoanManager belongs to a User
-    public function user()
+    // ... (Your user(), clients(), loans(), etc. relationships are all correct) ...
+    public function user() { return $this->belongsTo(User::class); }
+    public function clients() { return $this->hasMany(Client::class, 'loan_manager_id', 'id'); }
+    public function loans() { return $this->hasMany(Loan::class, 'loan_manager_id', 'id'); }
+    public function payments() { return $this->hasManyThrough(Payment::class, Loan::class); }
+    public function expenses() { return $this->hasMany(Expense::class, 'loan_manager_id', 'id'); }
+    public function bankTransactions() { return $this->hasMany(BankTransaction::class, 'loan_manager_id', 'id'); }
+    public function cashTransactions() { return $this->hasMany(CashTransaction::class, 'loan_manager_id', 'id'); }
+
+
+    // --- GLOBAL HELPER METHODS ---
+    public static function getCurrency()
     {
-        return $this->belongsTo(User::class);
+        if (Auth::check() && Auth::user()->loanManager) {
+            return Auth::user()->loanManager->currency_symbol ?? 'UGX';
+        }
+        return 'UGX';
     }
 
-    // Relationship: A LoanManager manages many Borrowers
-    public function borrowers()
+    public static function getGlobalSupportPhone()
     {
-        return $this->hasMany(Borrower::class);
+        return '0740859082'; // Default
     }
 
-    // Relationship: A LoanManager has many Loans (indirectly through borrowers, but also directly linked)
-    public function loans()
-    {
-        return $this->hasMany(Loan::class);
-    }
-
-    // Relationship: A LoanManager has many SubscriptionPayments
-    public function subscriptionPayments()
-    {
-        return $this->hasMany(SubscriptionPayment::class);
-    }
+    // *** THIS IS THE FIX: ***
+    // *** THE BROKEN accounts() FUNCTION IS NOW REMOVED. ***
 }

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers\LoanManager;
 
 use App\Http\Controllers\Controller;
@@ -20,9 +21,10 @@ class CashTransferController extends Controller
             'amount' => 'required|numeric|min:0',
         ]);
 
-        $transfer = Auth::user()->cashTransfers()->create($validated);
+        // CORRECTED: Create the transfer via the loanManager
+        $transfer = Auth::user()->loanManager->cashTransfers()->create($validated);
 
-        // Accounting Entries
+        // Your existing accounting logic is preserved
         $cashAccount = Account::where('name', 'Cash on Hand')->firstOrFail();
         $transferAccount = Account::where('name', 'Inter-branch Transfers')->firstOrFail();
 
@@ -37,19 +39,32 @@ class CashTransferController extends Controller
         return redirect()->route('dashboard')->with('status', 'Cash transfer recorded successfully!');
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $transfers = Auth::user()->cashTransfers()->latest()->get();
-        return view('loan-manager.cash-transfers.index', compact('transfers'));
+        $startDate = $request->input('start_date', now()->startOfMonth()->toDateString());
+        $endDate = $request->input('end_date', now()->endOfMonth()->toDateString());
+
+        // CORRECTED: Fetch transfers from the loanManager
+        $transfers = Auth::user()->loanManager->cashTransfers()
+            ->whereBetween('transaction_date', [$startDate, $endDate])
+            ->latest()
+            ->get();
+            
+        return view('loan-manager.transactions.cash-transactions.index', compact('transfers', 'startDate', 'endDate'));
     }
 
-    /**
-     * Generate a PDF of all cash transfers.
-     */
-    public function downloadPdf()
+    public function downloadPdf(Request $request)
     {
-        $transfers = Auth::user()->cashTransfers()->latest()->get();
-        $pdf = Pdf::loadView('reports.pdf.cash-transfers', compact('transfers'));
+        $startDate = $request->input('start_date', now()->startOfMonth()->toDateString());
+        $endDate = $request->input('end_date', now()->endOfMonth()->toDateString());
+
+        // CORRECTED: Fetch transfers from the loanManager for the PDF
+        $transfers = Auth::user()->loanManager->cashTransfers()
+            ->whereBetween('transaction_date', [$startDate, $endDate])
+            ->latest()
+            ->get();
+
+        $pdf = Pdf::loadView('reports.pdf.cash-transfers', compact('transfers', 'startDate', 'endDate'));
         return $pdf->stream('cash-transfers-report.pdf');
     }
 }
