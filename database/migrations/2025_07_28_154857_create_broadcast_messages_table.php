@@ -1,30 +1,30 @@
 <?php
 
-use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
+    use Illuminate\Database\Migrations\Migration;
+    use Illuminate\Database\Schema\Blueprint;
+    use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
-{
-    /**
-     * Run the migrations.
-     */
-    public function up(): void
+    return new class extends Migration
     {
-        Schema::create('broadcast_messages', function (Blueprint $table) {
-             $table->id();
-        $table->foreignId('user_id')->constrained(); // The Admin who sent the message
-        $table->string('title');
-        $table->text('body');
-        $table->timestamps();
-        });
-    }
+        /**
+         * Run the migrations.
+         */
+        public function up(): void
+        {
+            Schema::table('broadcast_messages', function (Blueprint $table) {
+                // Add the new column needed for the broadcast feature
+                $table->boolean('is_active')->default(false)->after('body');
+            });
+        }
 
-    /**
-     * Reverse the migrations.
-     */
-    public function down(): void
-    {
-        Schema::dropIfExists('broadcast_messages');
-    }
-};
+        /**
+         * Reverse the migrations.
+         */
+        public function down(): void
+        {
+            Schema::table('broadcast_messages', function (Blueprint $table) {
+                // Drop the column if rolling back the migration
+                $table->dropColumn('is_active');
+            });
+        }
+    };

@@ -104,7 +104,17 @@
         
         <div class="content-wrapper">
             <main>
-                <?php echo $__env->yieldContent('content'); ?>
+                
+                <?php if(isset($broadcastMessage)): ?>
+                <div class="alert alert-info alert-dismissible fade show" role="alert">
+                    <h5 class="alert-heading"><?php echo e($broadcastMessage->title); ?></h5>
+                    <p><?php echo e($broadcastMessage->body); ?></p>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                <?php endif; ?>
+                
+
+                <?php echo $__env->yieldContent('content'); ?> 
             </main>
         </div>
 
@@ -126,4 +136,5 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     
 </body>
-</html><?php /**PATH C:\xampp\htdocs\agile_accounts\agile_accounts\resources\views/layouts/manager.blade.php ENDPATH**/ ?>
+</html>
+<?php /**PATH C:\xampp\htdocs\agile_accounts\agile_accounts\resources\views/layouts/manager.blade.php ENDPATH**/ ?>

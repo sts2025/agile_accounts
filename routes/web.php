@@ -16,6 +16,7 @@ use App\Http\Controllers\LoanManager\CollateralController;
 use App\Http\Controllers\LoanManager\BankTransactionController;
 use App\Http\Controllers\LoanManager\ProfileController;
 use App\Http\Controllers\LoanManager\CashTransactionController;
+use App\Http\Controllers\Admin\BroadcastMessageController;
 use App\Models\User;
 
 // Explicitly bind {manager} to the User model
@@ -43,7 +44,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/dashboard', [AdminController::class, 'index'])->name('dashboard');
 
         // ✅ Fix: clean and clear route naming
-        Route::post('/managers/{manager}/update-settings', [AdminController::class, 'updateSettings'])
+        Route::put('/managers/{manager}/update-settings', [AdminController::class, 'updateSettings'])
             ->name('managers.update');
 
         // ✅ Add missing routes that were causing 404 errors
@@ -57,6 +58,13 @@ Route::middleware(['auth'])->group(function () {
             ->name('users.impersonate');
         Route::get('/users/stop-impersonate', [AdminController::class, 'stopImpersonate'])
             ->name('users.stop_impersonate');
+
+        // *** NEW BROADCAST ROUTES ***
+        Route::get('broadcasts', [BroadcastMessageController::class, 'index'])->name('broadcasts.index');
+        Route::post('broadcasts', [BroadcastMessageController::class, 'store'])->name('broadcasts.store');
+        Route::patch('broadcasts/{broadcast}/toggle', [BroadcastMessageController::class, 'toggle'])->name('broadcasts.toggle');
+        Route::delete('broadcasts/{broadcast}', [BroadcastMessageController::class, 'destroy'])->name('broadcasts.destroy');
+        // *** END BROADCAST ROUTES ***
     });
 
     // ===================== LOAN MANAGER ROUTES =====================

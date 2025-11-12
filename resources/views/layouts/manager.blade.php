@@ -104,7 +104,17 @@
         
         <div class="content-wrapper">
             <main>
-                @yield('content')
+                {{-- *** BROADCAST MESSAGE DISPLAY *** --}}
+                @if (isset($broadcastMessage))
+                <div class="alert alert-info alert-dismissible fade show" role="alert">
+                    <h5 class="alert-heading">{{ $broadcastMessage->title }}</h5>
+                    <p>{{ $broadcastMessage->body }}</p>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                @endif
+                {{-- *** END BROADCAST MESSAGE *** --}}
+
+                @yield('content') {{-- *** THE SINGLE, CORRECT YIELD *** --}}
             </main>
         </div>
 
