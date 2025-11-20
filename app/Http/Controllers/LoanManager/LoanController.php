@@ -20,24 +20,32 @@ class LoanController extends Controller
 {
     public function index(Request $request)
     {
-        // Get the Loan Manager associated with the authenticated user
         $loanManager = Auth::user()->loanManager;
         
+        // Start the query relative to the logged-in manager
         $query = $loanManager->loans()->with('client');
 
+        // --- 1. Search Logic ---
         if ($search = $request->input('search')) {
             $query->whereHas('client', function($subQuery) use ($search) {
                 $searchTerm = strtolower($search);
                 $subQuery->whereRaw('LOWER(name) LIKE ?', ["%{$searchTerm}%"]);
             });
         }
+
+        // --- 2. Sidebar Filter Logic (NEW) ---
+        // This handles the "Completed Loans" link from your sidebar
+        if ($filter = $request->input('filter')) {
+            if ($filter === 'completed') {
+                // Assumes 'paid' is the status used for completed loans in your DB
+                $query->where('status', 'paid');
+            }
+        }
         
-        // FIX 1: Retrieve the currency symbol from the manager's profile
-        $currency_symbol = $loanManager->currency_symbol ?? 'UGX'; // Default to UGX if not set
+        $currency_symbol = $loanManager->currency_symbol ?? 'UGX'; 
 
         $loans = $query->latest()->get(); 
         
-        // FIX 1: Pass the currency symbol to the view
         return view('loan-manager.loans.index', compact('loans', 'currency_symbol'));
     }
 
@@ -51,21 +59,14 @@ class LoanController extends Controller
     {
         $loanManagerId = Auth::user()->loanManager->id;
 
-        // --- FINAL VALIDATION & SECURITY CHECKS ---
         $validatedData = $request->validate([
             'client_id' => ['required', Rule::exists('clients', 'id')->where('loan_manager_id', $loanManagerId)],
-            
-            // Financial Checks
-            'principal_amount' => 'required|numeric|min:100', // Principal must be sensible (>= 100)
-            'processing_fee' => 'nullable|numeric|min:0', // Fee must be non-negative
-            'interest_rate' => 'required|numeric|min:0|max:100', // Rate must be 0% to 100%
-            
-            // Term & Frequency Checks
+            'principal_amount' => 'required|numeric|min:100', 
+            'processing_fee' => 'nullable|numeric|min:0', 
+            'interest_rate' => 'required|numeric|min:0|max:100', 
             'term' => 'required|integer|min:1', 
             'repayment_frequency' => 'required|string|in:Daily,Weekly,Monthly',
-            
-            // Date Check
-            'start_date' => 'required|date|after_or_equal:today', // Must start today or in the future
+            'start_date' => 'required|date|after_or_equal:today', 
 
             // Guarantor Checks
             'guarantor_first_name' => 'nullable|string|max:255',
@@ -78,7 +79,7 @@ class LoanController extends Controller
             // Collateral Checks
             'collateral_type' => 'nullable|string|max:100',
             'collateral_description' => 'required_with:collateral_type|string',
-            'collateral_valuation_amount' => 'required_with:collateral_type|numeric|min:1', // Valuation must be positive
+            'collateral_valuation_amount' => 'required_with:collateral_type|numeric|min:1', 
         ]);
 
         DB::transaction(function () use ($validatedData, $request, $loanManagerId) {
@@ -94,7 +95,6 @@ class LoanController extends Controller
                 'status' => 'active',
             ]);
 
-            // Guarantor Creation Logic
             if ($request->filled('guarantor_first_name')) {
                 $loan->guarantors()->create([
                     'first_name' => $validatedData['guarantor_first_name'],
@@ -106,7 +106,6 @@ class LoanController extends Controller
                 ]);
             }
 
-            // Collateral Creation Logic
             if ($request->filled('collateral_type')) {
                 $loan->collaterals()->create([
                     'collateral_type' => $validatedData['collateral_type'],
@@ -115,23 +114,14 @@ class LoanController extends Controller
                 ]);
             }
             
-            // Record Disbursement to General Ledger
             $this->recordLoanDisbursement($loan);
         });
 
         return redirect()->route('loans.index')->with('success', 'New loan created and recorded successfully!');
     }
 
-    /**
-     * FIX 2: NEW METHOD TO HANDLE STATUS UPDATE VIA AJAX PATCH REQUEST
-     * Updates the status of a specific loan and returns a JSON response.
-     * * @param \Illuminate\Http\Request $request
-     * @param \App\Models\Loan $loan
-     * @return \Illuminate\Http\JsonResponse
-     */
     public function updateStatus(Request $request, Loan $loan)
     {
-        // Authorization check: Ensure the loan belongs to the authenticated manager
         if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { 
             return response()->json(['message' => 'Unauthorized action.'], 403);
         }
@@ -140,11 +130,9 @@ class LoanController extends Controller
             'new_status' => 'required|string|in:active,paid,defaulted',
         ]);
 
-        // Update the status
         $loan->status = $validated['new_status'];
         $loan->save();
 
-        // Return JSON response for the AJAX script to handle
         return response()->json([
             'success' => true,
             'message' => 'Loan status updated successfully.',
@@ -152,17 +140,14 @@ class LoanController extends Controller
             'loan_id' => $loan->id
         ]);
     }
-    // END FIX 2
 
-    // === NEW FEATURE: REPAYMENT CALCULATOR ===
     public function showCalculator(Request $request)
     {
         $schedule = [];
         $calculationPerformed = false;
-        $totalInterest = 0;      // Initialize
-        $totalRepayable = 0;     // Initialize
+        $totalInterest = 0;      
+        $totalRepayable = 0;     
         
-        // Default inputs (or use user input from form)
         $principal = $request->input('principal_amount', 1000000);
         $interestRate = $request->input('interest_rate', 10);
         $term = $request->input('term', 12);
@@ -172,7 +157,6 @@ class LoanController extends Controller
             $calculationPerformed = true;
             
             if ($principal > 0 && $term > 0) {
-                // Calculation assumes simple interest spread equally over term
                 $totalInterest = $principal * ($interestRate / 100);
                 $totalRepayable = $principal + $totalInterest;
                 
@@ -181,13 +165,12 @@ class LoanController extends Controller
                 $interestComponent = $totalInterest / $term;
                 
                 $balance = $totalRepayable;
-                $startDate = Carbon::today(); // Schedule always starts from today for projection
+                $startDate = Carbon::today();
 
                 for ($i = 1; $i <= $term; $i++) {
                     $balance -= $paymentPerPeriod;
                     $dueDate = $startDate->copy();
                     
-                    // Determine the due date based on frequency
                     switch ($frequency) {
                         case 'Daily':   $dueDate->addDays($i);   break;
                         case 'Weekly':  $dueDate->addWeeks($i);  break;
@@ -206,20 +189,14 @@ class LoanController extends Controller
             }
         }
 
-        // --- FINAL CONFIRMED VIEW PATH ---
-        // This expects the file to be at resources/views/loan-manager/loans/calculator.blade.php
-        
-        // *** THE FIX: Pass all calculated variables to the view ***
         return view('loan-manager.loans.calculator', compact( 
             'schedule', 'principal', 'interestRate', 'term', 'frequency', 
-            'calculationPerformed', 'totalRepayable', 'totalInterest' // <-- FIXED
+            'calculationPerformed', 'totalRepayable', 'totalInterest'
         ));
     }
 
-
     public function show(Loan $loan)
     {
-        // Authorize against the loanManager's ID
         if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
         
         $loan->load('payments', 'guarantors', 'collaterals');
@@ -251,14 +228,12 @@ class LoanController extends Controller
 
     public function edit(Loan $loan)
     {
-        // Authorize against the loanManager's ID
         if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
         return view('loan-manager.loans.edit', compact('loan'));
     }
 
     public function update(Request $request, Loan $loan)
     {
-        // Authorize against the loanManager's ID
         if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
         
         $validatedData = $request->validate([
@@ -275,7 +250,6 @@ class LoanController extends Controller
 
     public function destroy(Loan $loan)
     {
-        // Authorize against the loanManager's ID
         if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
         $loan->delete();
         return redirect()->route('loans.index')->with('status', 'Loan has been deleted successfully.');
@@ -287,7 +261,6 @@ class LoanController extends Controller
         $cashOnHandAccount = Account::where('name', 'Cash on Hand')->first();
         
         if ($loansReceivableAccount && $cashOnHandAccount) {
-            // Debit Loans Receivable (Asset increase)
             GeneralLedgerTransaction::create([
                 'account_id' => $loansReceivableAccount->id, 
                 'loan_id' => $loan->id, 
@@ -297,7 +270,6 @@ class LoanController extends Controller
                 'credit' => 0
             ]);
             
-            // Credit Cash on Hand (Asset decrease)
             GeneralLedgerTransaction::create([
                 'account_id' => $cashOnHandAccount->id, 
                 'loan_id' => $loan->id, 
@@ -307,10 +279,8 @@ class LoanController extends Controller
                 'credit' => $loan->principal_amount
             ]);
             
-            // The General Ledger logic must also account for the Processing Fee as Income/Revenue
             $processingFeeAccount = Account::where('name', 'Processing Fee Income')->first();
             if ($processingFeeAccount && $loan->processing_fee > 0) {
-                // Debit Cash (Asset Increase) and Credit Income (Revenue Increase) for the fee
                 GeneralLedgerTransaction::create([
                     'account_id' => $cashOnHandAccount->id, 
                     'loan_id' => $loan->id, 
@@ -333,17 +303,11 @@ class LoanController extends Controller
 
     public function downloadLoanAgreement(Loan $loan)
     {
-        // Authorize against the loanManager's ID
         if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
         
         $loan->load('client', 'guarantors', 'collaterals');
-        
-        // --- THE FIX ---
-        // Get the entire LoanManager object. This has the business name and user details.
         $loanManager = Auth::user()->loanManager;
-        // --- END FIX ---
 
-        // Pass BOTH the $loan and the $loanManager to the PDF
         $pdf = Pdf::loadView('reports.pdf.loan-agreement', compact('loan', 'loanManager'));
         
         return $pdf->stream('loan-agreement-'.$loan->id.'.pdf');
