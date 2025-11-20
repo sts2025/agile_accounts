@@ -1,33 +1,34 @@
-@extends('layouts.manager')
 
-@section('title', 'My Loans')
 
-@section('content')
+<?php $__env->startSection('title', 'My Loans'); ?>
+
+<?php $__env->startSection('content'); ?>
     <div class="d-flex justify-content-between align-items-center mb-4">
-        {{-- The title is now simply "Loans" --}}
+        
         <h1>Loans</h1>
         <div>
-            {{-- We add a button to manage clients from here --}}
-            <a href="{{ route('clients.index') }}" class="btn btn-secondary">Manage Clients</a>
-            <a href="{{ route('loans.create') }}" class="btn btn-primary">Create New Loan</a>
+            
+            <a href="<?php echo e(route('clients.index')); ?>" class="btn btn-secondary">Manage Clients</a>
+            <a href="<?php echo e(route('loans.create')); ?>" class="btn btn-primary">Create New Loan</a>
         </div>
     </div>
     
-    @if (session('status'))
+    <?php if(session('status')): ?>
         <div class="alert alert-success">
-            {{ session('status') }}
+            <?php echo e(session('status')); ?>
+
         </div>
-    @endif
+    <?php endif; ?>
     
-    {{-- Display success/error messages for status updates --}}
+    
     <div id="status-message-container"></div>
 
     <div class="card mb-4">
         <div class="card-header">Find a Loan</div>
         <div class="card-body">
-            <form method="GET" action="{{ route('loans.index') }}">
+            <form method="GET" action="<?php echo e(route('loans.index')); ?>">
                 <div class="input-group">
-                    <input type="text" name="search" class="form-control" placeholder="Search by client's name..." value="{{ request('search') }}">
+                    <input type="text" name="search" class="form-control" placeholder="Search by client's name..." value="<?php echo e(request('search')); ?>">
                     <button class="btn btn-primary" type="submit">Search</button>
                 </div>
             </form>
@@ -40,9 +41,9 @@
                 <thead>
                     <tr>
                         <th>Client Name</th>
-                        {{-- FIX 1: Dynamic Currency in Table Header --}}
-                        {{-- Note: $currency_symbol must be passed from the controller (see fix for LoanController) --}}
-                        <th>Principal Amount ({{ $currency_symbol ?? 'UGX' }})</th>
+                        
+                        
+                        <th>Principal Amount (<?php echo e($currency_symbol ?? 'UGX'); ?>)</th>
                         <th>Interest Rate (%)</th>
                         <th>Term</th>
                         <th>Frequency</th>
@@ -51,64 +52,65 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse ($loans as $loan)
+                    <?php $__empty_1 = true; $__currentLoopData = $loans; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $loan): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                         <tr>
                             <td>
-                                {{-- We now link to the client's edit page from here --}}
-                                <a href="{{ route('clients.edit', $loan->client->id) }}">{{ $loan->client->name ?? 'N/A' }}</a>
+                                
+                                <a href="<?php echo e(route('clients.edit', $loan->client->id)); ?>"><?php echo e($loan->client->name ?? 'N/A'); ?></a>
                                 <br>
-                                <small class="text-muted">{{ $loan->client->phone_number ?? '' }}</small>
+                                <small class="text-muted"><?php echo e($loan->client->phone_number ?? ''); ?></small>
                             </td>
-                            <td>{{ number_format($loan->principal_amount, 0) }}</td>
-                            <td>{{ $loan->interest_rate }}%</td>
-                            <td>{{ $loan->term }}</td>
-                            <td>{{ $loan->repayment_frequency }}</td>
+                            <td><?php echo e(number_format($loan->principal_amount, 0)); ?></td>
+                            <td><?php echo e($loan->interest_rate); ?>%</td>
+                            <td><?php echo e($loan->term); ?></td>
+                            <td><?php echo e($loan->repayment_frequency); ?></td>
                             <td>
-                                {{-- FIX 2: Dynamic Status Toggle Button --}}
-                                <form action="{{ route('loans.update-status', $loan->id) }}" method="POST" class="d-inline status-form" data-loan-id="{{ $loan->id }}">
-                                    @csrf
-                                    @method('PATCH')
-                                    <input type="hidden" name="new_status" value="{{ $loan->status == 'active' ? 'paid' : 'active' }}">
+                                
+                                <form action="<?php echo e(route('loans.update-status', $loan->id)); ?>" method="POST" class="d-inline status-form" data-loan-id="<?php echo e($loan->id); ?>">
+                                    <?php echo csrf_field(); ?>
+                                    <?php echo method_field('PATCH'); ?>
+                                    <input type="hidden" name="new_status" value="<?php echo e($loan->status == 'active' ? 'paid' : 'active'); ?>">
                                     
-                                    @php
+                                    <?php
                                         $buttonClass = $loan->status == 'active' ? 'btn-primary' : ($loan->status == 'paid' ? 'btn-success' : 'btn-secondary');
-                                    @endphp
+                                    ?>
                                     
                                     <button type="submit" 
-                                            class="btn btn-sm text-white rounded-pill loan-status-btn {{ $buttonClass }}" 
-                                            data-current-status="{{ $loan->status }}"
-                                            id="status-btn-{{ $loan->id }}">
-                                        {{ ucfirst($loan->status) }}
+                                            class="btn btn-sm text-white rounded-pill loan-status-btn <?php echo e($buttonClass); ?>" 
+                                            data-current-status="<?php echo e($loan->status); ?>"
+                                            id="status-btn-<?php echo e($loan->id); ?>">
+                                        <?php echo e(ucfirst($loan->status)); ?>
+
                                     </button>
                                 </form>
                             </td>
                             <td>
-                                <a href="{{ route('loans.show', $loan->id) }}" class="btn btn-info btn-sm">View</a>
-                                <a href="{{ route('loans.edit', $loan->id) }}" class="btn btn-secondary btn-sm">Edit</a>
-                                <form method="POST" action="{{ route('loans.destroy', $loan->id) }}" style="display:inline;">
-                                    @csrf
-                                    @method('DELETE')
+                                <a href="<?php echo e(route('loans.show', $loan->id)); ?>" class="btn btn-info btn-sm">View</a>
+                                <a href="<?php echo e(route('loans.edit', $loan->id)); ?>" class="btn btn-secondary btn-sm">Edit</a>
+                                <form method="POST" action="<?php echo e(route('loans.destroy', $loan->id)); ?>" style="display:inline;">
+                                    <?php echo csrf_field(); ?>
+                                    <?php echo method_field('DELETE'); ?>
                                     <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure?');">Delete</button>
                                 </form>
                             </td>
                         </tr>
-                    @empty
+                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                         <tr>
                             <td colspan="7" class="text-center">No loans found.</td>
                         </tr>
-                    @endforelse
+                    <?php endif; ?>
                 </tbody>
             </table>
             
-            {{-- Pagination links would go here if $loans was paginated --}}
-            {{-- @if (method_exists($loans, 'links')) --}}
-                {{-- {{ $loans->links() }} --}}
-            {{-- @endif --}}
+            
+            
+                
+            
         </div>
     </div>
-@endsection
+<?php $__env->stopSection(); ?>
 
-@section('scripts')
+<?php $__env->startSection('scripts'); ?>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         
@@ -203,4 +205,5 @@
         }
     });
 </script>
-@endsection
+<?php $__env->stopSection(); ?>
+<?php echo $__env->make('layouts.manager', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH C:\xampp\htdocs\agile_accounts\agile_accounts\resources\views/loan-manager/loans/index.blade.php ENDPATH**/ ?>

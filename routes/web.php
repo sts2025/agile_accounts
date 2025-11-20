@@ -43,11 +43,11 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/dashboard', [AdminController::class, 'index'])->name('dashboard');
 
-        // ✅ Fix: clean and clear route naming
+        // Manager settings updates
         Route::put('/managers/{manager}/update-settings', [AdminController::class, 'updateSettings'])
             ->name('managers.update');
 
-        // ✅ Add missing routes that were causing 404 errors
+        // Manager status toggles
         Route::get('/managers/{manager}/activate', [AdminController::class, 'activate'])
             ->name('managers.activate');
         Route::get('/managers/{manager}/suspend', [AdminController::class, 'suspend'])
@@ -59,12 +59,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/users/stop-impersonate', [AdminController::class, 'stopImpersonate'])
             ->name('users.stop_impersonate');
 
-        // *** NEW BROADCAST ROUTES ***
+        // Broadcasts
         Route::get('broadcasts', [BroadcastMessageController::class, 'index'])->name('broadcasts.index');
         Route::post('broadcasts', [BroadcastMessageController::class, 'store'])->name('broadcasts.store');
         Route::patch('broadcasts/{broadcast}/toggle', [BroadcastMessageController::class, 'toggle'])->name('broadcasts.toggle');
         Route::delete('broadcasts/{broadcast}', [BroadcastMessageController::class, 'destroy'])->name('broadcasts.destroy');
-        // *** END BROADCAST ROUTES ***
     });
 
     // ===================== LOAN MANAGER ROUTES =====================
@@ -81,16 +80,20 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/clients/{client}/ledger', [ClientController::class, 'showLedger'])->name('clients.ledger');
 
         // Loans
-Route::get('/loans/calculator', [LoanController::class, 'showCalculator'])->name('loans.showCalculator');
-Route::get('/loans/{loan}/download-agreement', [LoanController::class, 'downloadLoanAgreement'])
-    ->name('loans.downloadAgreement');
-Route::resource('loans', LoanController::class);
+        Route::get('/loans/calculator', [LoanController::class, 'showCalculator'])->name('loans.showCalculator');
+        Route::get('/loans/{loan}/download-agreement', [LoanController::class, 'downloadLoanAgreement'])
+            ->name('loans.downloadAgreement');
+        // ✅ LOAN STATUS UPDATE ROUTE (Fix 3 from earlier)
+        Route::patch('/loans/{loan}/status', [LoanController::class, 'updateStatus'])
+            ->name('loans.update-status');
+        Route::resource('loans', LoanController::class);
 
 
         // Payments
-        Route::get('/payments/create', [PaymentController::class, 'create'])->name('payments.create');
-        Route::post('/payments', [PaymentController::class, 'store'])->name('payments.store');
+        // ✅ FULL PAYMENT RESOURCE RESTORED
+        Route::resource('payments', PaymentController::class);
         Route::get('/payments/{payment}/receipt', [PaymentController::class, 'showReceipt'])->name('payments.receipt');
+
 
         // Guarantors & Collaterals
         Route::post('/guarantors', [GuarantorController::class, 'store'])->name('guarantors.store');

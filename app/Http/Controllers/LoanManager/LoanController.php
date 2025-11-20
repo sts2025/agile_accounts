@@ -20,7 +20,10 @@ class LoanController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Auth::user()->loanManager->loans()->with('client');
+        // Get the Loan Manager associated with the authenticated user
+        $loanManager = Auth::user()->loanManager;
+        
+        $query = $loanManager->loans()->with('client');
 
         if ($search = $request->input('search')) {
             $query->whereHas('client', function($subQuery) use ($search) {
@@ -28,8 +31,14 @@ class LoanController extends Controller
                 $subQuery->whereRaw('LOWER(name) LIKE ?', ["%{$searchTerm}%"]);
             });
         }
-        $loans = $query->latest()->get();
-        return view('loan-manager.loans.index', compact('loans'));
+        
+        // FIX 1: Retrieve the currency symbol from the manager's profile
+        $currency_symbol = $loanManager->currency_symbol ?? 'UGX'; // Default to UGX if not set
+
+        $loans = $query->latest()->get(); 
+        
+        // FIX 1: Pass the currency symbol to the view
+        return view('loan-manager.loans.index', compact('loans', 'currency_symbol'));
     }
 
     public function create()
@@ -112,6 +121,38 @@ class LoanController extends Controller
 
         return redirect()->route('loans.index')->with('success', 'New loan created and recorded successfully!');
     }
+
+    /**
+     * FIX 2: NEW METHOD TO HANDLE STATUS UPDATE VIA AJAX PATCH REQUEST
+     * Updates the status of a specific loan and returns a JSON response.
+     * * @param \Illuminate\Http\Request $request
+     * @param \App\Models\Loan $loan
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateStatus(Request $request, Loan $loan)
+    {
+        // Authorization check: Ensure the loan belongs to the authenticated manager
+        if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { 
+            return response()->json(['message' => 'Unauthorized action.'], 403);
+        }
+
+        $validated = $request->validate([
+            'new_status' => 'required|string|in:active,paid,defaulted',
+        ]);
+
+        // Update the status
+        $loan->status = $validated['new_status'];
+        $loan->save();
+
+        // Return JSON response for the AJAX script to handle
+        return response()->json([
+            'success' => true,
+            'message' => 'Loan status updated successfully.',
+            'status' => $loan->status,
+            'loan_id' => $loan->id
+        ]);
+    }
+    // END FIX 2
 
     // === NEW FEATURE: REPAYMENT CALCULATOR ===
     public function showCalculator(Request $request)
@@ -290,7 +331,7 @@ class LoanController extends Controller
         }
     }
 
-   public function downloadLoanAgreement(Loan $loan)
+    public function downloadLoanAgreement(Loan $loan)
     {
         // Authorize against the loanManager's ID
         if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
@@ -307,4 +348,4 @@ class LoanController extends Controller
         
         return $pdf->stream('loan-agreement-'.$loan->id.'.pdf');
     }
-} 
+}

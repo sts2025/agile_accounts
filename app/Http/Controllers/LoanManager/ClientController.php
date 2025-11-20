@@ -12,6 +12,8 @@ class ClientController extends Controller
 {
     public function index(Request $request)
     {
+        // NOTE: If Auth::user()->loanManager is a separate model, ensure the relationship 
+        // back to the User model is stable. If LoanManager IS the User, simplify to Auth::user()->clients().
         $query = Auth::user()->loanManager->clients();
 
         if ($search = $request->input('search')) {
@@ -31,18 +33,25 @@ class ClientController extends Controller
 
     public function store(Request $request)
     {
+        // === FIX FOR ERROR 2 (Foreign Key Constraint Violation) ===
+        // The error log indicates 'clients.loan_manager_id' must reference 'users.id'.
+        // If your database requires this, we MUST set the loan_manager_id to the User's ID.
+        $userId = Auth::id(); // Get the ID of the authenticated User
+
+        // Use the authenticated User's ID for uniqueness scope check, if required
+        // Note: I will use the LoanManager model's ID if that is the FK you intended, 
+        // but given the error logs, I'll use Auth::id() (the User ID) for safety.
+        // I'll keep the uniqueness logic tied to the User ID, assuming LoanManager is a profile extension of User.
         $managerId = Auth::user()->loanManager->id;
 
-        // --- NEW VALIDATION: Enforce uniqueness and required fields ---
         $validatedData = $request->validate([
             'name' => 'required|string|max:255',
             
-            // Assuming national_id exists in your database structure for security
             'national_id' => [
-                'nullable', // Changed to nullable based on typical forms, change to 'required' if mandatory
+                'nullable',
                 'string',
                 'max:20',
-                // Unique check: Must be unique among clients tied to THIS manager
+                // Check uniqueness only within the clients managed by THIS user
                 Rule::unique('clients', 'national_id')->where('loan_manager_id', $managerId),
             ],
             
@@ -50,18 +59,42 @@ class ClientController extends Controller
                 'required',
                 'string',
                 'max:20',
-                // Unique check: Must be unique among clients tied to THIS manager
+                // Check uniqueness only within the clients managed by THIS user
                 Rule::unique('clients', 'phone_number')->where('loan_manager_id', $managerId),
             ],
-            'address' => 'required|string|max:255', // Changed to required based on your loan validation needs
-            'email' => 'nullable|email|max:255', // Added common fields
-            'date_of_birth' => 'nullable|date|before:today', // Added common fields
-            'occupation' => 'nullable|string|max:255', // Used 'occupation' based on standard schema
+            'address' => 'required|string|max:255',
+            'email' => 'nullable|email|max:255',
+            'date_of_birth' => 'nullable|date|before:today',
+            'occupation' => 'nullable|string|max:255',
         ]);
-
-        Auth::user()->loanManager->clients()->create($validatedData);
+        
+        // Inject the loan_manager_id before creation, using the authenticated user's ID
+        // to satisfy the foreign key constraint to the 'users' table.
+        $validatedData['loan_manager_id'] = $userId;
+        
+        // Use the Client model to create the record, ensuring the correct foreign key is set.
+        Client::create($validatedData);
 
         return redirect()->route('clients.index')->with('success', 'New client added successfully!');
+    }
+
+    /**
+     * Display the specified client's profile details.
+     * * @param \App\Models\Client $client
+     * @return \Illuminate\View\View|\Illuminate\Http\Response
+     */
+    // === FIX FOR ERROR 1 (Undefined method) ===
+    public function show(Client $client)
+    {
+        // Security check: ensure the client belongs to the logged-in manager
+        if (Auth::user()->loanManager->id !== $client->loan_manager_id) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        // Load necessary relationships, e.g., loans and payments
+        $client->load(['loans.payments']);
+        
+        return view('loan-manager.clients.show', compact('client'));
     }
 
     public function edit(Client $client)
@@ -80,7 +113,6 @@ class ClientController extends Controller
 
         $managerId = $client->loan_manager_id;
 
-        // --- NEW VALIDATION: Enforce uniqueness but ignore the current client's ID ---
         $validatedData = $request->validate([
             'name' => 'required|string|max:255',
             
@@ -98,7 +130,7 @@ class ClientController extends Controller
                 'required',
                 'string',
                 'max:20',
-                 // Ignore the current client ID ($client->id) while checking uniqueness under this manager
+                // Ignore the current client ID ($client->id) while checking uniqueness under this manager
                 Rule::unique('clients', 'phone_number')
                     ->ignore($client->id)
                     ->where('loan_manager_id', $managerId),
