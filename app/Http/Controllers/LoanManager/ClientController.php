@@ -10,6 +10,15 @@ use Illuminate\Validation\Rule;
 
 class ClientController extends Controller
 {
+    /**
+     * Constructor to apply elevated privileges middleware.
+     */
+    public function __construct()
+    {
+        // Require the 'elevated_privileges' middleware for updating and deleting client records.
+        $this->middleware('elevated_privileges')->only(['update', 'destroy']);
+    }
+
     public function index(Request $request)
     {
         // Start the query for clients belonging to the logged-in Loan Manager
@@ -26,7 +35,6 @@ class ClientController extends Controller
             switch ($filter) {
                 case 'not_paid':
                     // Clients with currently ACTIVE loans (owing money)
-                    // Assumes your loans table has a 'status' column with value 'active'
                     $query->whereHas('loans', function($q) {
                         $q->where('status', 'active');
                     });
@@ -76,7 +84,10 @@ class ClientController extends Controller
             'occupation' => 'nullable|string|max:255',
         ]);
         
-        $validatedData['loan_manager_id'] = $userId;
+        // --- FIX IS HERE ---
+        // We must use the Loan Manager ID, not the User ID.
+        // This ensures the client is linked to the Loan Manager profile.
+        $validatedData['loan_manager_id'] = $managerId;
         
         Client::create($validatedData);
 
@@ -104,6 +115,7 @@ class ClientController extends Controller
 
     public function update(Request $request, Client $client)
     {
+        // Middleware 'elevated_privileges' will check the session before this runs.
         if (Auth::user()->loanManager->id !== $client->loan_manager_id) {
             abort(403);
         }
@@ -133,6 +145,7 @@ class ClientController extends Controller
 
     public function destroy(Client $client)
     {
+        // Middleware 'elevated_privileges' will check the session before this runs.
         if (Auth::user()->loanManager->id !== $client->loan_manager_id) {
             abort(403);
         }

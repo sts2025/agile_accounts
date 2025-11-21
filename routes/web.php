@@ -18,6 +18,8 @@ use App\Http\Controllers\LoanManager\ProfileController;
 use App\Http\Controllers\LoanManager\CashTransactionController;
 use App\Http\Controllers\Admin\BroadcastMessageController;
 use App\Models\User;
+// NEW: Import the ElevateController
+use App\Http\Controllers\ElevateController; 
 
 // Explicitly bind {manager} to the User model
 Route::model('manager', User::class);
@@ -74,6 +76,11 @@ Route::middleware(['auth'])->group(function () {
         // Profile
         Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
         Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+        
+        // --- NEW: ELEVATED PRIVILEGE ROUTES ---
+        Route::post('/manager/elevate/login', [ElevateController::class, 'login'])->name('manager.elevate.login');
+        Route::post('/manager/elevate/logout', [ElevateController::class, 'logout'])->name('manager.elevate.logout');
+        // -------------------------------------
 
         // Clients
         Route::resource('clients', ClientController::class);
@@ -83,14 +90,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/loans/calculator', [LoanController::class, 'showCalculator'])->name('loans.showCalculator');
         Route::get('/loans/{loan}/download-agreement', [LoanController::class, 'downloadLoanAgreement'])
             ->name('loans.downloadAgreement');
-        // ✅ LOAN STATUS UPDATE ROUTE (Fix 3 from earlier)
         Route::patch('/loans/{loan}/status', [LoanController::class, 'updateStatus'])
             ->name('loans.update-status');
         Route::resource('loans', LoanController::class);
 
 
         // Payments
-        // ✅ FULL PAYMENT RESOURCE RESTORED
         Route::resource('payments', PaymentController::class);
         Route::get('/payments/{payment}/receipt', [PaymentController::class, 'showReceipt'])->name('payments.receipt');
 

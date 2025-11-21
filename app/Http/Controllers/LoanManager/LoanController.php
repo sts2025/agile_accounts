@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers\LoanManager;
 
-use App\Http\Controllers\Controller;
+// FIX: Extend the Framework Controller directly to ensure middleware() exists
+use Illuminate\Routing\Controller; 
 use App\Models\Loan;
 use App\Models\Client;
 use App\Models\Account;
@@ -18,6 +19,15 @@ use Barryvdh\DomPDF\Facade\Pdf;
 
 class LoanController extends Controller
 {
+    /**
+     * Constructor to apply elevated privileges middleware.
+     */
+    public function __construct()
+    {
+        // This will now work because we are extending Illuminate\Routing\Controller
+        $this->middleware('elevated')->only(['update', 'destroy']);
+    }
+
     public function index(Request $request)
     {
         $loanManager = Auth::user()->loanManager;
@@ -145,8 +155,8 @@ class LoanController extends Controller
     {
         $schedule = [];
         $calculationPerformed = false;
-        $totalInterest = 0;      
-        $totalRepayable = 0;     
+        $totalInterest = 0; 
+        $totalRepayable = 0;
         
         $principal = $request->input('principal_amount', 1000000);
         $interestRate = $request->input('interest_rate', 10);
@@ -172,9 +182,9 @@ class LoanController extends Controller
                     $dueDate = $startDate->copy();
                     
                     switch ($frequency) {
-                        case 'Daily':   $dueDate->addDays($i);   break;
-                        case 'Weekly':  $dueDate->addWeeks($i);  break;
-                        default:        $dueDate->addMonths($i); break;
+                        case 'Daily':  $dueDate->addDays($i); break;
+                        case 'Weekly': $dueDate->addWeeks($i); break;
+                        default: $dueDate->addMonths($i); break;
                     }
                     
                     $schedule[] = [
@@ -216,9 +226,9 @@ class LoanController extends Controller
             $balance -= $paymentPerPeriod;
             $dueDate = $startDate->copy();
             switch ($loan->repayment_frequency) {
-                case 'Daily':   $dueDate->addDays($i);   break;
-                case 'Weekly':  $dueDate->addWeeks($i);  break;
-                default:        $dueDate->addMonths($i); break;
+                case 'Daily':  $dueDate->addDays($i); break;
+                case 'Weekly': $dueDate->addWeeks($i); break;
+                default: $dueDate->addMonths($i); break;
             }
             $schedule[] = [ 'period' => $i, 'due_date' => $dueDate->toDateString(), 'payment_amount' => $paymentPerPeriod, 'principal' => $principalComponent, 'interest' => $interestComponent, 'balance' => ($i == $term) ? 0 : $balance ];
         }
@@ -234,6 +244,7 @@ class LoanController extends Controller
 
     public function update(Request $request, Loan $loan)
     {
+        // Protected by 'elevated' middleware
         if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
         
         $validatedData = $request->validate([
@@ -250,6 +261,7 @@ class LoanController extends Controller
 
     public function destroy(Loan $loan)
     {
+        // Protected by 'elevated' middleware
         if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
         $loan->delete();
         return redirect()->route('loans.index')->with('status', 'Loan has been deleted successfully.');
