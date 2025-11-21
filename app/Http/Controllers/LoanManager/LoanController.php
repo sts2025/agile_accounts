@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\LoanManager;
 
-// FIX: Extend the Framework Controller directly to ensure middleware() exists
+// FIX: Extend the Framework Controller directly to ensure middleware() works
 use Illuminate\Routing\Controller; 
 use App\Models\Loan;
 use App\Models\Client;
@@ -24,7 +24,6 @@ class LoanController extends Controller
      */
     public function __construct()
     {
-        // This will now work because we are extending Illuminate\Routing\Controller
         $this->middleware('elevated')->only(['update', 'destroy']);
     }
 
@@ -43,11 +42,9 @@ class LoanController extends Controller
             });
         }
 
-        // --- 2. Sidebar Filter Logic (NEW) ---
-        // This handles the "Completed Loans" link from your sidebar
+        // --- 2. Sidebar Filter Logic ---
         if ($filter = $request->input('filter')) {
             if ($filter === 'completed') {
-                // Assumes 'paid' is the status used for completed loans in your DB
                 $query->where('status', 'paid');
             }
         }
@@ -61,7 +58,12 @@ class LoanController extends Controller
 
     public function create()
     {
-        $clients = Auth::user()->loanManager->clients;
+        // FIX IS HERE: Added orderBy('created_at', 'desc')
+        // This sorts the dropdown so the client you just added is at the very top.
+        $clients = Auth::user()->loanManager->clients()
+                        ->orderBy('created_at', 'desc')
+                        ->get();
+
         return view('loan-manager.loans.create', compact('clients'));
     }
 
@@ -244,7 +246,6 @@ class LoanController extends Controller
 
     public function update(Request $request, Loan $loan)
     {
-        // Protected by 'elevated' middleware
         if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
         
         $validatedData = $request->validate([
@@ -261,7 +262,6 @@ class LoanController extends Controller
 
     public function destroy(Loan $loan)
     {
-        // Protected by 'elevated' middleware
         if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
         $loan->delete();
         return redirect()->route('loans.index')->with('status', 'Loan has been deleted successfully.');

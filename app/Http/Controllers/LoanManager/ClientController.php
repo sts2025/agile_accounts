@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\LoanManager;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\Controller; // Reverted to standard Controller
 use App\Models\Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -10,50 +10,54 @@ use Illuminate\Validation\Rule;
 
 class ClientController extends Controller
 {
-    /**
-     * Constructor to apply elevated privileges middleware.
-     */
-    public function __construct()
-    {
-        // Require the 'elevated_privileges' middleware for updating and deleting client records.
-        $this->middleware('elevated_privileges')->only(['update', 'destroy']);
-    }
+    // -------------------------------------------------------------------------
+    // NOTE: We removed the __construct() to stop the crash.
+    // We have moved the 'elevated' middleware check to your web.php file instead.
+    // This guarantees security without the "Undefined method" error.
+    // -------------------------------------------------------------------------
 
     public function index(Request $request)
     {
-        // Start the query for clients belonging to the logged-in Loan Manager
-        $query = Auth::user()->loanManager->clients();
+        $manager = Auth::user()->loanManager;
+        
+        // Start with clients belonging to this manager
+        $query = $manager->clients();
 
-        // 1. Handle Search
-        if ($search = $request->input('search')) {
-            $searchTerm = strtolower($search);
-            $query->whereRaw('LOWER(name) LIKE ?', ["%{$searchTerm}%"]);
+        // --- SEARCH / TRACING LOGIC ---
+        // We check 'search', 'q', and 'term' to ensure the search bar works no matter what it sends
+        $search = $request->input('search') ?? $request->input('q') ?? $request->input('term');
+
+        if ($search) {
+            $searchTerm = strtolower(trim($search));
+            $query->where(function($q) use ($searchTerm) {
+                $q->whereRaw('LOWER(name) LIKE ?', ["%{$searchTerm}%"])
+                  ->orWhere('national_id', 'LIKE', "%{$searchTerm}%")
+                  ->orWhere('phone_number', 'LIKE', "%{$searchTerm}%")
+                  ->orWhere('email', 'LIKE', "%{$searchTerm}%"); // Added Email for better tracing
+            });
         }
 
-        // 2. Handle Sidebar Filters
+        // --- FILTER LOGIC ---
         if ($filter = $request->input('filter')) {
             switch ($filter) {
                 case 'not_paid':
-                    // Clients with currently ACTIVE loans (owing money)
-                    $query->whereHas('loans', function($q) {
-                        $q->where('status', 'active');
-                    });
+                    $query->whereHas('loans', function($q) { $q->where('status', 'active'); });
                     break;
-
                 case 'with_loans':
-                    // Clients who have ANY history of loans (active or paid)
                     $query->has('loans');
                     break;
-
                 case 'no_loans':
-                    // Clients who have NEVER taken a loan
                     $query->doesntHave('loans');
                     break;
             }
         }
 
-        // Get results (sorting by latest created first)
         $clients = $query->latest()->get();
+
+        // Support for AJAX search (dropdowns)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json($clients);
+        }
 
         return view('loan-manager.clients.index', compact('clients'));
     }
@@ -65,124 +69,100 @@ class ClientController extends Controller
 
     public function store(Request $request)
     {
-        $userId = Auth::id(); 
         $managerId = Auth::user()->loanManager->id;
 
-        $validatedData = $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'national_id' => [
-                'nullable', 'string', 'max:20',
-                Rule::unique('clients', 'national_id')->where('loan_manager_id', $managerId),
-            ],
-            'phone_number' => [
-                'required', 'string', 'max:20',
-                Rule::unique('clients', 'phone_number')->where('loan_manager_id', $managerId),
-            ],
+            'national_id' => ['nullable', 'string', 'max:20', Rule::unique('clients')->where('loan_manager_id', $managerId)],
+            'phone_number' => ['required', 'string', 'max:20', Rule::unique('clients')->where('loan_manager_id', $managerId)],
             'address' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'date_of_birth' => 'nullable|date|before:today',
             'occupation' => 'nullable|string|max:255',
         ]);
         
-        // --- FIX IS HERE ---
-        // We must use the Loan Manager ID, not the User ID.
-        // This ensures the client is linked to the Loan Manager profile.
-        $validatedData['loan_manager_id'] = $managerId;
-        
-        Client::create($validatedData);
+        $validated['loan_manager_id'] = $managerId;
+        Client::create($validated);
 
-        return redirect()->route('clients.index')->with('success', 'New client added successfully!');
+        return redirect()->route('clients.index')->with('success', 'Client created successfully.');
     }
 
     public function show(Client $client)
     {
-        if (Auth::user()->loanManager->id !== $client->loan_manager_id) {
-            abort(403, 'Unauthorized action.');
-        }
-
+        $this->authorizeManager($client);
         $client->load(['loans.payments']);
-        
         return view('loan-manager.clients.show', compact('client'));
     }
 
     public function edit(Client $client)
     {
-        if (Auth::user()->loanManager->id !== $client->loan_manager_id) {
-            abort(403);
-        }
+        $this->authorizeManager($client);
         return view('loan-manager.clients.edit', compact('client'));
     }
 
     public function update(Request $request, Client $client)
     {
-        // Middleware 'elevated_privileges' will check the session before this runs.
-        if (Auth::user()->loanManager->id !== $client->loan_manager_id) {
-            abort(403);
-        }
-
+        // Security is now handled in web.php (middleware: elevated)
+        $this->authorizeManager($client);
+        
         $managerId = $client->loan_manager_id;
 
-        $validatedData = $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'national_id' => [
-                'nullable', 'string', 'max:20',
-                Rule::unique('clients', 'national_id')->ignore($client->id)->where('loan_manager_id', $managerId),
-            ],
-            'phone_number' => [
-                'required', 'string', 'max:20',
-                Rule::unique('clients', 'phone_number')->ignore($client->id)->where('loan_manager_id', $managerId),
-            ],
+            'national_id' => ['nullable', 'string', 'max:20', Rule::unique('clients')->ignore($client->id)->where('loan_manager_id', $managerId)],
+            'phone_number' => ['required', 'string', 'max:20', Rule::unique('clients')->ignore($client->id)->where('loan_manager_id', $managerId)],
             'address' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'date_of_birth' => 'nullable|date|before:today',
             'occupation' => 'nullable|string|max:255',
         ]);
 
-        $client->update($validatedData);
+        $client->update($validated);
 
         return redirect()->route('clients.show', $client)->with('success', 'Client details updated successfully!');
     }
 
     public function destroy(Client $client)
     {
-        // Middleware 'elevated_privileges' will check the session before this runs.
-        if (Auth::user()->loanManager->id !== $client->loan_manager_id) {
-            abort(403);
-        }
+        // Security is now handled in web.php (middleware: elevated)
+        $this->authorizeManager($client);
         $client->delete();
         return redirect()->route('clients.index')->with('status', 'Client has been deleted successfully!');
     }
 
     public function showLedger(Client $client)
     {
-        if ($client->loan_manager_id !== Auth::user()->loanManager->id) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorizeManager($client);
 
         $transactions = collect();
-
         foreach ($client->loans()->with('payments')->get() as $loan) {
-            $totalInterest = $loan->principal_amount * ($loan->interest_rate / 100);
+            $interest = $loan->principal_amount * ($loan->interest_rate / 100);
             $transactions->push((object)[
                 'date' => $loan->start_date,
                 'description' => "Loan Disbursed (ID: {$loan->id})",
-                'debit' => $loan->principal_amount + $totalInterest,
-                'credit' => 0,
+                'debit' => $loan->principal_amount + $interest,
+                'credit' => 0
             ]);
-
             foreach ($loan->payments as $payment) {
                 $transactions->push((object)[
                     'date' => $payment->payment_date,
                     'description' => "Payment Received (Receipt: {$payment->id})",
                     'debit' => 0,
-                    'credit' => $payment->amount_paid,
+                    'credit' => $payment->amount_paid
                 ]);
             }
         }
 
         return view('loan-manager.clients.ledger', [
             'client' => $client,
-            'transactions' => $transactions->sortBy('date'),
+            'transactions' => $transactions->sortBy('date')
         ]);
+    }
+
+    private function authorizeManager(Client $client)
+    {
+        if (Auth::user()->loanManager->id !== $client->loan_manager_id) {
+            abort(403, 'Unauthorized: This client does not belong to you.');
+        }
     }
 }

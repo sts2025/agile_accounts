@@ -18,10 +18,9 @@ class Client extends Model
     protected $fillable = [
         'loan_manager_id',
         'name',
-        //'email',
         'phone_number',
         'address',
-        'business_occupation'
+        'occupation'
     ];
     public function loans()
     {
