@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Receipt #{{ $payment->reference_id ?? $payment->id }}</title>
+    <title>Receipt #<?php echo e($payment->id ?? 'N/A'); ?></title>
     <style>
         /* General styles, mostly unchanged from previous versions, ensuring thermal look */
         body {
@@ -106,54 +106,54 @@
 </head>
 <body>
 
-    @php
-        // --- 1. RELATIONSHIP FIX ---
+    <?php
+        // --- 1. VARIABLE SETUP & CURRENCY FIX ---
         $loan = $payment->loan;
-        // CHANGED: optional($loan)->manager TO optional($loan)->loanManager
-        // This matches the relationship used in PaymentController: $payment->load('loan.loanManager')
-        $manager = optional($loan)->loanManager; 
-        
+        $manager = optional($loan)->manager;
         $currency = optional($manager)->currency_symbol ?? 'UGX';
         
-        // --- FINANCIAL CALCULATION ---
+        // --- FINANCIAL CALCULATION FIXES ---
         $calculatedInterest = optional($loan)->principal_amount * (optional($loan)->interest_rate / 100);
         $interestAmount = optional($loan)->interest_amount ?? $calculatedInterest ?? 0;
         
+        // Total Repayable is Principal + Interest (Processing Fee excluded from balance calculation)
         $totalRepayable = optional($loan)->principal_amount + $interestAmount;
         $totalPaid = $payment->loan->payments->sum('amount_paid'); 
         $loan_balance = $totalRepayable - $totalPaid; 
         
         $loan_arrears = optional($loan)->arrears ?? 0;
-        $principal_amount = number_format(optional($loan)->principal_amount ?? 0, 0, '.', '');
+        $principal_amount = number_format(optional($loan)->principal_amount ?? optional($loan)->amount_given ?? 0, 0, '.', '');
         
-        // --- DATE TAKEN FIX ---
+        // --- DATE TAKEN FIX (Robust parsing to ensure a date is displayed) ---
         $date_taken = 'N/A';
-        $raw_date = optional($loan)->disbursement_date ?? optional($loan)->start_date; // fallback to start_date
+        $raw_date = optional($loan)->disbursement_date;
         if ($raw_date) {
             try {
+                // Try parsing the date, first as a standard timestamp/string, then fall back if needed
                 $date_taken = date('d-m-Y', strtotime($raw_date));
-            } catch (\Exception $e) {}
+            } catch (\Exception $e) {
+                // If parsing fails, stick to N/A
+            }
         }
         
         $status = optional($loan)->status ?? 'N/A';
         
-        // Client details
+        // Client and Manager details
         $client = optional($loan)->client;
-        $client_phone = optional($client)->phone_number ?? 'N/A';
-        $manager_phone = optional($manager)->phone_number ?? 'N/A'; // matched column name
-    @endphp
+        $client_phone = optional($client)->phone ?? 'N/A';
+        $manager_phone = optional($manager)->support_phone ?? 'N/A';
+    ?>
 
     <div class="receipt-wrapper">
         
         <!-- 1. COMPANY HEADER -->
         <div class="header text-center">
-            {{-- FIX: Using business_name to match your database --}}
-            <h2 class="uppercase">{{ optional($manager)->business_name ?? optional(optional($manager)->user)->name ?? 'LOAN MANAGER' }}</h2>
-            <p>{{ optional($manager)->address ?? 'Main Branch' }}</p>
-            <p>{{ $manager_phone }}</p>
+            <h2 class="uppercase"><?php echo e(optional($manager)->company_name ?? 'AGILE ACCOUNTS'); ?></h2>
+            <p><?php echo e(optional($manager)->address ?? 'Main Branch'); ?></p>
+            <p><?php echo e($manager_phone); ?></p>
             
             <div class="double-line"></div>
-            <p class="font-bold uppercase">*** PAYMENT RECEIPT ***</p>
+            <p class="font-bold uppercase">*** LOAN PAYMENT RECEIPT <?php echo e($payment->id ?? ''); ?> ***</p>
             <div class="dashed-line"></div>
         </div>
 
@@ -161,67 +161,75 @@
         <div class="loan-details">
             <div class="info-row">
                 <span class="label">Receipt No:</span>
-                {{-- FIX: Using reference_id as primary receipt number --}}
-                <span class="value">{{ $payment->reference_id ?? $payment->receipt_number }}</span>
+                <span class="value"><?php echo e($payment->receipt_number ?? 'N/A'); ?></span>
             </div>
             
             <div class="info-row">
                 <span class="label">Loan ID:</span>
-                <span class="value">{{ optional($loan)->reference_id ?? '#'.$payment->loan_id }}</span>
+                <span class="value"><?php echo e(optional($loan)->reference_id ?? 'LN-'.$payment->loan_id); ?></span>
             </div>
 
             <div class="info-row">
                 <span class="label">Customer:</span>
-                <span class="value uppercase">{{ optional($client)->name ?? 'N/A' }}</span>
+                <span class="value uppercase"><?php echo e(optional($client)->name ?? 'N/A'); ?></span>
             </div>
              <div class="info-row">
-                <span class="label">Phone:</span>
-                <span class="value">{{ $client_phone }}</span>
+                <span class="label">Customer Phone:</span>
+                <span class="value"><?php echo e($client_phone); ?></span>
             </div>
             
-            <div class="dashed-line"></div>
+            <!-- Principal Amount -->
+            <div class="info-row">
+                <span class="label">Principal Amount:</span>
+                <span class="value"><?php echo e($currency); ?> <?php echo e($principal_amount); ?>/=</span>
+            </div>
+            
+            <!-- Interest Amount (Explicit and using fallback calc) -->
+            <div class="info-row">
+                <span class="label">Interest Amount:</span>
+                <span class="value"><?php echo e($currency); ?> <?php echo e(number_format($interestAmount, 0)); ?>/=</span>
+            </div>
 
-            <!-- Financials -->
+            <!-- Date Taken (Disbursement Date) -->
             <div class="info-row">
-                <span class="label">Principal:</span>
-                <span class="value">{{ $currency }} {{ number_format($principal_amount) }}</span>
+                <span class="label">Date Taken (Given):</span>
+                <span class="value"><?php echo e($date_taken); ?></span>
             </div>
             
             <div class="info-row">
-                <span class="label">Interest:</span>
-                <span class="value">{{ $currency }} {{ number_format($interestAmount, 0) }}</span>
+                <span class="label">Status:</span>
+                <span class="value"><?php echo e($status); ?></span>
             </div>
-
-            <div class="info-row">
-                <span class="label">Date Given:</span>
-                <span class="value">{{ $date_taken }}</span>
-            </div>
-            
-            <div class="info-row">
+             <div class="info-row">
                 <span class="label">Payment Date:</span>
-                <span class="value">{{ $payment->payment_date ? date('d-m-Y', strtotime($payment->payment_date)) : date('d-m-Y') }}</span>
+                <span class="value"><?php echo e($payment->payment_date ? date('d-m-Y', strtotime($payment->payment_date)) : date('d-m-Y')); ?></span>
             </div>
         </div>
 
-        <div class="quad-star">***** PAID *****</div>
+        <div class="quad-star">*****Payment Details*****</div>
 
         <!-- 3. PAYMENT FINANCIALS SECTION -->
         <div class="financials">
-            <div class="info-row" style="font-size: 16px; margin: 10px 0;">
-                <span class="label font-bold">AMOUNT PAID:</span>
-                <span class="value font-bold">{{ $currency }} {{ number_format($payment->amount_paid ?? 0, 0) }}</span>
+            <div class="info-row" style="font-size: 14px;">
+                <span class="label font-bold">Amount Paid:</span>
+                <span class="value font-bold"><?php echo e($currency); ?> <?php echo e(number_format($payment->amount_paid ?? 0, 0)); ?>/=</span>
             </div>
             
+            <!-- Balance calculation uses P+I only -->
+            <div class="info-row">
+                <span class="label">New Loan Balance:</span>
+                <span class="value"><?php echo e($currency); ?> <?php echo e(number_format(max(0, $loan_balance), 0)); ?>/=</span>
+            </div>
+            
+            <div class="info-row">
+                <span class="label">Arrears:</span>
+                <span class="value"><?php echo e($currency); ?> <?php echo e(number_format($loan_arrears, 0)); ?>/=</span>
+            </div>
+
             <div class="dashed-line"></div>
-            
-            <div class="info-row">
-                <span class="label">New Balance:</span>
-                <span class="value">{{ $currency }} {{ number_format(max(0, $loan_balance), 0) }}</span>
-            </div>
-            
-            <div class="info-row">
-                <span class="label">Method:</span>
-                <span class="value">{{ ucfirst($payment->payment_method ?? 'Cash') }}</span>
+             <div class="info-row">
+                <span class="label">Paid Method:</span>
+                <span class="value"><?php echo e(ucfirst($payment->payment_method ?? 'Cash')); ?></span>
             </div>
         </div>
 
@@ -229,22 +237,28 @@
 
         <!-- 4. SIGNATURES -->
         <div class="sig-box">
-            <div class="label">Cashier: <span class="font-bold">{{ strtoupper(auth()->user()->name ?? 'SYSTEM') }}</span></div>
-            <div class="label" style="margin-top: 15px;">Signature:</div>
+            <div class="label">Cashier: <span class="font-bold"><?php echo e(strtoupper(auth()->user()->name ?? 'SYSTEM')); ?></span></div>
+            <div class="label">Cashier Contact: <span class="font-bold"><?php echo e($manager_phone); ?></span></div>
+            <div class="label" style="margin-top: 10px;">Cashier Signature:</div>
+            <div class="sig-line"></div>
+        </div>
+
+        <div class="sig-box">
+            <div class="label">Customer Signature:</div>
             <div class="sig-line"></div>
         </div>
 
         <div class="text-center" style="margin-top: 20px; font-size: 10px;">
-            Thank you for your business!
+            Thank you for choosing us!
         </div>
 
         <!-- 5. ACTIONS (Non-Printable) -->
         <div class="no-print">
             <button onclick="window.print()" class="btn btn-print">Print Receipt</button>
-            <a href="{{ route('loans.show', $loan->id) }}" class="btn btn-back">Back to Loan</a>
+            <a href="<?php echo e(route('loans.show', $loan->id)); ?>" class="btn btn-back">View Loan Details</a>
         </div>
 
     </div>
 
 </body>
-</html>
+</html><?php /**PATH C:\xampp\htdocs\agile_accounts\agile_accounts\resources\views/loan-manager/payments/receipt-thermal.blade.php ENDPATH**/ ?>

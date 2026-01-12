@@ -4,10 +4,10 @@ namespace App\Http\Controllers\LoanManager;
 
 use App\Http\Controllers\Controller;
 use App\Models\Expense;
+use App\Models\ExpenseCategory; // Imported Model
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
-// We don't need to import ExpenseCategory here, but we will load the relationship
 
 class ExpenseController extends Controller
 {
@@ -18,18 +18,17 @@ class ExpenseController extends Controller
     {
         $managerId = Auth::user()->loanManager->id;
 
-        // Get dates from request, default to current month
         $startDate = $request->input('start_date', Carbon::now()->startOfMonth()->toDateString());
         $endDate = $request->input('end_date', Carbon::now()->endOfMonth()->toDateString());
 
         $expenses = Expense::where('loan_manager_id', $managerId)
             ->whereBetween('expense_date', [$startDate, $endDate])
-            // *** THIS IS THE FIX for the report ***
-            // Eager load the 'category' relationship to get the name
             ->with('category') 
-            ->get(); // Removed orderBy for safety
+            ->latest('expense_date') // Better sorting
+            ->paginate(15); // Added pagination for better performance
 
-        return view('loan-manager.transactions.expenses.index', [
+        // Note: Ensure your view folder structure matches this path
+        return view('loan-manager.expenses.index', [
             'expenses' => $expenses,
             'startDate' => $startDate,
             'endDate' => $endDate
@@ -37,34 +36,112 @@ class ExpenseController extends Controller
     }
 
     /**
+     * Show the form for creating a new expense.
+     * Needed to populate the dropdown/datalist.
+     */
+    public function create()
+    {
+        $manager = Auth::user()->loanManager;
+        // Fetch existing categories to show in the dropdown list
+        $categories = ExpenseCategory::where('loan_manager_id', $manager->id)->orderBy('name')->get();
+        
+        return view('loan-manager.expenses.create', compact('categories'));
+    }
+
+    /**
      * Store a newly created resource in storage.
      */
     public function store(Request $request)
     {
-        // *** THIS IS THE FIX for saving ***
-        // We now validate 'expense_category_id' (which is a number)
-        $validated = $request->validate([
-            'expense_category_id' => 'required|integer|exists:expense_categories,id',
-            'amount' => 'required|numeric|min:0',
-            'expense_date' => 'required|date',
-        ]);
-
         $managerId = Auth::user()->loanManager->id;
 
-        // Create the expense using the validated data
-        Expense::create([
-            'loan_manager_id' => $managerId,
-            'expense_category_id' => $validated['expense_category_id'], // <-- Save the ID
-            'amount' => $validated['amount'],
-            'expense_date' => $validated['expense_date'],
+        // *** FIX: Validate NAME, not ID ***
+        // We allow 'category_name' to be a string so you can type anything.
+        $validated = $request->validate([
+            'category_name' => 'required|string|max:255', // Changed from ID validation
+            'amount' => 'required|numeric|min:0',
+            'expense_date' => 'required|date',
+            'description' => 'nullable|string|max:500',
         ]);
 
-        // Redirect to the index page to show the report
-        // We pass the date of the transaction to filter the report
+        // *** SMART CATEGORY LOGIC ***
+        // 1. Check if category exists for this manager.
+        // 2. If yes, use it. If no, create it.
+        $category = ExpenseCategory::firstOrCreate(
+            [
+                'loan_manager_id' => $managerId,
+                'name' => trim($validated['category_name']) // Trim whitespace
+            ]
+        );
+
+        // Create the expense
+        Expense::create([
+            'loan_manager_id' => $managerId,
+            'expense_category_id' => $category->id, // Use the ID from the found/created category
+            'amount' => $validated['amount'],
+            'expense_date' => $validated['expense_date'],
+            'description' => $validated['description'] ?? null,
+        ]);
+
         return redirect()->route('expenses.index', [
             'start_date' => Carbon::parse($validated['expense_date'])->startOfMonth()->toDateString(),
             'end_date' => Carbon::parse($validated['expense_date'])->endOfMonth()->toDateString(),
-        ])->with('success', 'Expense recorded successfully!');
+        ])->with('success', 'Expense recorded successfully.');
+    }
+
+    /**
+     * Show the form for editing the specified resource.
+     */
+    public function edit(Expense $expense)
+    {
+        if ($expense->loan_manager_id !== Auth::user()->loanManager->id) {
+            abort(403);
+        }
+        
+        $categories = ExpenseCategory::where('loan_manager_id', $expense->loan_manager_id)->orderBy('name')->get();
+        return view('loan-manager.expenses.edit', compact('expense', 'categories'));
+    }
+
+    /**
+     * Update the specified resource in storage.
+     */
+    public function update(Request $request, Expense $expense)
+    {
+        if ($expense->loan_manager_id !== Auth::user()->loanManager->id) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'category_name' => 'required|string|max:255',
+            'amount' => 'required|numeric|min:0',
+            'expense_date' => 'required|date',
+            'description' => 'nullable|string|max:500',
+        ]);
+
+        // Smart Category Update
+        $category = ExpenseCategory::firstOrCreate(
+            [
+                'loan_manager_id' => $expense->loan_manager_id,
+                'name' => trim($validated['category_name'])
+            ]
+        );
+
+        $expense->update([
+            'expense_date' => $validated['expense_date'],
+            'amount' => $validated['amount'],
+            'description' => $validated['description'],
+            'expense_category_id' => $category->id
+        ]);
+
+        return redirect()->route('expenses.index')->with('success', 'Expense updated successfully.');
+    }
+
+    public function destroy(Expense $expense)
+    {
+        if ($expense->loan_manager_id !== Auth::user()->loanManager->id) {
+            abort(403);
+        }
+        $expense->delete();
+        return redirect()->route('expenses.index')->with('success', 'Expense deleted.');
     }
 }
-

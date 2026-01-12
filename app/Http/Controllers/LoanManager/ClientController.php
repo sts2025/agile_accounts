@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\LoanManager;
 
-use App\Http\Controllers\Controller; // Reverted to standard Controller
+use App\Http\Controllers\Controller;
 use App\Models\Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -10,21 +10,68 @@ use Illuminate\Validation\Rule;
 
 class ClientController extends Controller
 {
-    // -------------------------------------------------------------------------
-    // NOTE: We removed the __construct() to stop the crash.
-    // We have moved the 'elevated' middleware check to your web.php file instead.
-    // This guarantees security without the "Undefined method" error.
-    // -------------------------------------------------------------------------
+    // --- NEW: Global Check for Client Eligibility ---
+    public function checkGlobal(Request $request)
+    {
+        $nationalId = $request->input('national_id');
+        $phoneNumber = $request->input('phone_number');
+
+        if (!$nationalId && !$phoneNumber) {
+            return response()->json(['status' => 'error', 'message' => 'Provide ID or Phone']);
+        }
+
+        // Search the ENTIRE system (not just this manager's clients)
+        $clients = Client::with('loans.loanManager')
+            ->where(function($q) use ($nationalId, $phoneNumber) {
+                if ($nationalId) $q->where('national_id', $nationalId);
+                if ($phoneNumber) $q->orWhere('phone_number', $phoneNumber);
+            })
+            ->get();
+
+        if ($clients->isEmpty()) {
+            return response()->json(['status' => 'clean', 'message' => 'No existing records found globally.']);
+        }
+
+        $report = [];
+        $hasActiveLoans = false;
+
+        foreach ($clients as $client) {
+            // Filter for active loans
+            $activeLoans = $client->loans->filter(function($loan) {
+                return !in_array($loan->status, ['paid', 'rejected', 'closed']);
+            });
+
+            if ($activeLoans->count() > 0) {
+                $hasActiveLoans = true;
+                foreach ($activeLoans as $loan) {
+                    $managerName = $loan->loanManager->business_name ?? $loan->loanManager->user->name;
+                    $report[] = [
+                        'manager' => $managerName,
+                        'amount' => number_format($loan->principal_amount),
+                        'status' => ucfirst($loan->status)
+                    ];
+                }
+            }
+        }
+
+        if ($hasActiveLoans) {
+            return response()->json([
+                'status' => 'warning', 
+                'message' => 'Client has pending loans with other managers!',
+                'details' => $report
+            ]);
+        }
+
+        return response()->json(['status' => 'info', 'message' => 'Client exists in system but has NO active loans.']);
+    }
+
+    // --- STANDARD METHODS ---
 
     public function index(Request $request)
     {
         $manager = Auth::user()->loanManager;
-        
-        // Start with clients belonging to this manager
         $query = $manager->clients();
 
-        // --- SEARCH / TRACING LOGIC ---
-        // We check 'search', 'q', and 'term' to ensure the search bar works no matter what it sends
         $search = $request->input('search') ?? $request->input('q') ?? $request->input('term');
 
         if ($search) {
@@ -33,11 +80,10 @@ class ClientController extends Controller
                 $q->whereRaw('LOWER(name) LIKE ?', ["%{$searchTerm}%"])
                   ->orWhere('national_id', 'LIKE', "%{$searchTerm}%")
                   ->orWhere('phone_number', 'LIKE', "%{$searchTerm}%")
-                  ->orWhere('email', 'LIKE', "%{$searchTerm}%"); // Added Email for better tracing
+                  ->orWhere('email', 'LIKE', "%{$searchTerm}%");
             });
         }
 
-        // --- FILTER LOGIC ---
         if ($filter = $request->input('filter')) {
             switch ($filter) {
                 case 'not_paid':
@@ -54,7 +100,6 @@ class ClientController extends Controller
 
         $clients = $query->latest()->get();
 
-        // Support for AJAX search (dropdowns)
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json($clients);
         }
@@ -78,7 +123,8 @@ class ClientController extends Controller
             'address' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'date_of_birth' => 'nullable|date|before:today',
-            'occupation' => 'nullable|string|max:255',
+            'business_occupation' => 'nullable|string|max:255',
+            // Add business_stock_value if needed here
         ]);
         
         $validated['loan_manager_id'] = $managerId;
@@ -102,9 +148,7 @@ class ClientController extends Controller
 
     public function update(Request $request, Client $client)
     {
-        // Security is now handled in web.php (middleware: elevated)
         $this->authorizeManager($client);
-        
         $managerId = $client->loan_manager_id;
 
         $validated = $request->validate([
@@ -114,7 +158,7 @@ class ClientController extends Controller
             'address' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'date_of_birth' => 'nullable|date|before:today',
-            'occupation' => 'nullable|string|max:255',
+            'business_occupation' => 'nullable|string|max:255',
         ]);
 
         $client->update($validated);
@@ -124,7 +168,6 @@ class ClientController extends Controller
 
     public function destroy(Client $client)
     {
-        // Security is now handled in web.php (middleware: elevated)
         $this->authorizeManager($client);
         $client->delete();
         return redirect()->route('clients.index')->with('status', 'Client has been deleted successfully!');

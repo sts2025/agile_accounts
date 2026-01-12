@@ -20,7 +20,7 @@ class Client extends Model
         'name',
         'phone_number',
         'address',
-        'occupation'
+        'business_occupation'
     ];
     public function loans()
     {
