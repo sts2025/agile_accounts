@@ -198,7 +198,7 @@
         </div>
 
         <footer class="app-footer">
-            Developed by <strong>STREAMLINE TECH SOLUTION</strong> &copy; {{ date('Y') }} | 
+            Managed by <strong>BKR TECH </strong> &copy; {{ date('Y') }} | 
             Support: <a href="tel:{{ \App\Models\LoanManager::getGlobalSupportPhone() }}" class="fw-bold text-decoration-none">
                 {{ \App\Models\LoanManager::getGlobalSupportPhone() }}
             </a>

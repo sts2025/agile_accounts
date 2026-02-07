@@ -201,7 +201,7 @@
         </div>
 
         <footer class="app-footer">
-            Developed by <strong>STREAMLINE TECH SOLUTION</strong> &copy; <?php echo e(date('Y')); ?> | 
+            Managed by <strong>BKR TECH </strong> &copy; <?php echo e(date('Y')); ?> | 
             Support: <a href="tel:<?php echo e(\App\Models\LoanManager::getGlobalSupportPhone()); ?>" class="fw-bold text-decoration-none">
                 <?php echo e(\App\Models\LoanManager::getGlobalSupportPhone()); ?>
 
