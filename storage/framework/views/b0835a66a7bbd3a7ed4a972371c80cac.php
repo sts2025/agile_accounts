@@ -28,9 +28,18 @@
         .sidebar-sub-header { font-size: 0.7rem; text-transform: uppercase; color: #8fa0b1; margin: 15px 0 5px 15px; font-weight: bold; letter-spacing: 1px; }
         .submenu-header { font-size: 0.75rem; text-transform: uppercase; color: #8fa0b1; margin: 10px 0 5px 20px; font-weight: bold; }
 
-        /* BACKDROP KILLER */
-        .modal-backdrop { display: none !important; visibility: hidden !important; opacity: 0 !important; width: 0 !important; height: 0 !important; pointer-events: none !important; }
-        body, html { overflow: auto !important; height: auto !important; padding-right: 0 !important; }
+        /* BACKDROP KILLER - STRONG CSS OVERRIDE */
+        .modal-backdrop { 
+            display: none !important; 
+            visibility: hidden !important; 
+            opacity: 0 !important; 
+            pointer-events: none !important; 
+            z-index: -1 !important;
+        }
+        body.modal-open { 
+            overflow: auto !important; 
+            padding-right: 0 !important; 
+        }
     </style>
     <?php echo $__env->yieldPushContent('styles'); ?>
 </head>
@@ -157,7 +166,6 @@
     <div class="main-content">
         <div class="main-header bg-white px-3 rounded shadow-sm">
             
-            
             <h5 class="mb-0 text-dark fw-bold text-uppercase">
                 <?php echo e(optional(Auth::user()->getCompany())->company_name ?? 'Agile Accounts'); ?>
 
@@ -165,10 +173,6 @@
             
             <div class="top-menu">
                 <div class="d-flex align-items-center">
-                    
-                    
-
-                    
                     <div class="text-end me-3 d-none d-md-block">
                         <div class="fw-bold small text-dark"><?php echo e(Auth::user()->name); ?></div>
                         <div class="text-muted" style="font-size: 0.75rem;">
@@ -201,7 +205,7 @@
         </div>
 
         <footer class="app-footer">
-            Managed by <strong>BKR TECH </strong> &copy; <?php echo e(date('Y')); ?> | 
+            Developed by <strong>BKR TECH </strong> &copy; <?php echo e(date('Y')); ?> | 
             Support: <a href="tel:<?php echo e(\App\Models\LoanManager::getGlobalSupportPhone()); ?>" class="fw-bold text-decoration-none">
                 <?php echo e(\App\Models\LoanManager::getGlobalSupportPhone()); ?>
 
@@ -216,16 +220,32 @@
     
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            function killBackdrops() {
-                const backdrops = document.querySelectorAll('.modal-backdrop');
-                backdrops.forEach(b => b.remove());
+            // Function to remove stuck backdrops
+            function removeBackdrop() {
+                document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
                 document.body.classList.remove('modal-open');
                 document.body.style.overflow = 'auto';
                 document.body.style.paddingRight = '0px';
-                document.body.style.pointerEvents = 'auto';
             }
-            killBackdrops();
-            setInterval(killBackdrops, 500); // Check periodically
+
+            // 1. Initial Cleanup
+            removeBackdrop();
+
+            // 2. MutationObserver: Watch for the backdrop element and destroy it instantly
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    mutation.addedNodes.forEach((node) => {
+                        if (node.nodeType === 1 && node.classList.contains('modal-backdrop')) {
+                            node.remove();
+                            document.body.classList.remove('modal-open');
+                            document.body.style.overflow = 'auto';
+                        }
+                    });
+                });
+            });
+
+            // Start observing the body for added nodes
+            observer.observe(document.body, { childList: true, subtree: true });
         });
     </script>
 </body>

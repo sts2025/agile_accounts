@@ -28,9 +28,18 @@
         .sidebar-sub-header { font-size: 0.7rem; text-transform: uppercase; color: #8fa0b1; margin: 15px 0 5px 15px; font-weight: bold; letter-spacing: 1px; }
         .submenu-header { font-size: 0.75rem; text-transform: uppercase; color: #8fa0b1; margin: 10px 0 5px 20px; font-weight: bold; }
 
-        /* BACKDROP KILLER */
-        .modal-backdrop { display: none !important; visibility: hidden !important; opacity: 0 !important; width: 0 !important; height: 0 !important; pointer-events: none !important; }
-        body, html { overflow: auto !important; height: auto !important; padding-right: 0 !important; }
+        /* BACKDROP KILLER - STRONG CSS OVERRIDE */
+        .modal-backdrop { 
+            display: none !important; 
+            visibility: hidden !important; 
+            opacity: 0 !important; 
+            pointer-events: none !important; 
+            z-index: -1 !important;
+        }
+        body.modal-open { 
+            overflow: auto !important; 
+            padding-right: 0 !important; 
+        }
     </style>
     @stack('styles')
 </head>
@@ -38,7 +47,7 @@
     <div class="sidebar shadow">
         <div class="logo">
             <a href="{{ route('dashboard') }}" class="text-decoration-none">
-                {{-- SIDEBAR BRANDING: Updated to use getCompany() so it works for Cashiers too --}}
+                {{-- SIDEBAR BRANDING --}}
                 <h4 class="text-white mb-0 fw-bold">
                     {{ optional(Auth::user()->getCompany())->company_name ?? 'Agile Accounts' }}
                 </h4>
@@ -155,18 +164,13 @@
 
     <div class="main-content">
         <div class="main-header bg-white px-3 rounded shadow-sm">
-            {{-- PAGE TITLE REPLACED WITH COMPANY NAME --}}
-            {{-- Replaces 'LOAN MANAGER DASHBOARD' with Company Name --}}
+            {{-- HEADER: Company Name --}}
             <h5 class="mb-0 text-dark fw-bold text-uppercase">
                 {{ optional(Auth::user()->getCompany())->company_name ?? 'Agile Accounts' }}
             </h5>
             
             <div class="top-menu">
                 <div class="d-flex align-items-center">
-                    
-                    {{-- Removed redundant company name display from right side --}}
-
-                    {{-- USER INFO --}}
                     <div class="text-end me-3 d-none d-md-block">
                         <div class="fw-bold small text-dark">{{ Auth::user()->name }}</div>
                         <div class="text-muted" style="font-size: 0.75rem;">
@@ -198,7 +202,7 @@
         </div>
 
         <footer class="app-footer">
-            Managed by <strong>BKR TECH </strong> &copy; {{ date('Y') }} | 
+            Developed by <strong>BKR TECH </strong> &copy; {{ date('Y') }} | 
             Support: <a href="tel:{{ \App\Models\LoanManager::getGlobalSupportPhone() }}" class="fw-bold text-decoration-none">
                 {{ \App\Models\LoanManager::getGlobalSupportPhone() }}
             </a>
@@ -209,19 +213,35 @@
     @stack('scripts')
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     
-    {{-- BACKDROP KILLER --}}
+    {{-- ADVANCED BACKDROP KILLER --}}
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            function killBackdrops() {
-                const backdrops = document.querySelectorAll('.modal-backdrop');
-                backdrops.forEach(b => b.remove());
+            // Function to remove stuck backdrops
+            function removeBackdrop() {
+                document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
                 document.body.classList.remove('modal-open');
                 document.body.style.overflow = 'auto';
                 document.body.style.paddingRight = '0px';
-                document.body.style.pointerEvents = 'auto';
             }
-            killBackdrops();
-            setInterval(killBackdrops, 500); // Check periodically
+
+            // 1. Initial Cleanup
+            removeBackdrop();
+
+            // 2. MutationObserver: Watch for the backdrop element and destroy it instantly
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    mutation.addedNodes.forEach((node) => {
+                        if (node.nodeType === 1 && node.classList.contains('modal-backdrop')) {
+                            node.remove();
+                            document.body.classList.remove('modal-open');
+                            document.body.style.overflow = 'auto';
+                        }
+                    });
+                });
+            });
+
+            // Start observing the body for added nodes
+            observer.observe(document.body, { childList: true, subtree: true });
         });
     </script>
 </body>
