@@ -11,9 +11,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-    $middleware->alias([
-            'password.confirm' => \App\Http\Middleware\ConfirmPasswordForAction::class,
+        
+        // --- THIS IS THE MISSING PART CAUSING THE ERROR ---
+        $middleware->alias([
+            'subscription' => \App\Http\Middleware\CheckSubscription::class,
         ]);
+        
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

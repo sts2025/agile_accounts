@@ -1,30 +1,42 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\Schema\Blueprint;
+
+// --- CONTROLLERS ---
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\ElevateController; 
+use App\Models\User;
+
+// Admin Controllers
 use App\Http\Controllers\Admin\AdminController;
+use App\Http\Controllers\Admin\BroadcastMessageController;
+use App\Http\Controllers\Admin\SubscriptionController; // <--- NEW IMPORT
+
+// Manager Controllers
 use App\Http\Controllers\LoanManager\ClientController;
 use App\Http\Controllers\LoanManager\LoanController;
 use App\Http\Controllers\LoanManager\PaymentController;
-use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\LoanManager\ReportController;
-use App\Http\Middleware\CheckSubscriptionStatus;
 use App\Http\Controllers\LoanManager\ExpenseController;
 use App\Http\Controllers\LoanManager\GuarantorController;
 use App\Http\Controllers\LoanManager\CollateralController;
 use App\Http\Controllers\LoanManager\BankTransactionController;
 use App\Http\Controllers\LoanManager\ProfileController;
 use App\Http\Controllers\LoanManager\CashTransactionController;
-use App\Http\Controllers\Admin\BroadcastMessageController;
-use App\Models\User;
-// NEW: Import the ElevateController
-use App\Http\Controllers\ElevateController; 
+use App\Http\Controllers\LoanManager\BusinessSettingsController;
+use App\Http\Controllers\LoanManager\StaffController;
+
 
 // Explicitly bind {manager} to the User model
 Route::model('manager', User::class);
 
-// --- PUBLIC ROUTES ---
+// =============================================================
+// PUBLIC ROUTES (No Login Required)
+// =============================================================
 Route::get('/', fn() => redirect()->route('login'));
 Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.store');
@@ -32,34 +44,36 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 Route::get('/register', [AuthController::class, 'create'])->name('register');
 Route::post('/register', [AuthController::class, 'store'])->name('register.store');
 
-// Password reset
+// Password Reset
 Route::get('forgot-password', [PasswordResetController::class, 'showLinkRequestForm'])->name('password.request');
 Route::post('forgot-password', [PasswordResetController::class, 'sendResetLinkEmail'])->name('password.email');
 Route::get('reset-password/{token}', [PasswordResetController::class, 'showResetForm'])->name('password.reset');
 Route::post('reset-password', [PasswordResetController::class, 'reset'])->name('password.update');
 
-// --- AUTHENTICATED ROUTES ---
+
+// =============================================================
+// AUTHENTICATED ROUTES (Login Required)
+// =============================================================
 Route::middleware(['auth'])->group(function () {
 
-    // ===================== ADMIN ROUTES =====================
+    // ---------------------------------------------------------
+    // ADMIN ROUTES
+    // ---------------------------------------------------------
     Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/dashboard', [AdminController::class, 'index'])->name('dashboard');
+        
+        // Subscription Management (The route you were missing)
+        Route::post('/subscription/update', [SubscriptionController::class, 'update'])->name('subscription.update');
 
-        // Manager settings updates
-        Route::put('/managers/{manager}/update-settings', [AdminController::class, 'updateSettings'])
-            ->name('managers.update');
+        // Manager Actions
+        Route::put('/managers/{id}/update', [AdminController::class, 'update'])->name('managers.update');
+        Route::post('/managers/{id}/activate', [AdminController::class, 'activate'])->name('managers.activate');
+        Route::post('/managers/{id}/suspend', [AdminController::class, 'suspend'])->name('managers.suspend');
+        Route::delete('/managers/{id}', [AdminController::class, 'destroy'])->name('managers.destroy');
 
-        // Manager status toggles
-        Route::get('/managers/{manager}/activate', [AdminController::class, 'activate'])
-            ->name('managers.activate');
-        Route::get('/managers/{manager}/suspend', [AdminController::class, 'suspend'])
-            ->name('managers.suspend');
-
-        // "Login As" routes
-        Route::get('/users/{manager}/impersonate', [AdminController::class, 'impersonate'])
-            ->name('users.impersonate');
-        Route::get('/users/stop-impersonate', [AdminController::class, 'stopImpersonate'])
-            ->name('users.stop_impersonate');
+        // "Login As" Routes
+        Route::get('/users/{id}/impersonate', [AdminController::class, 'impersonate'])->name('users.impersonate');
+        Route::get('/users/stop-impersonate', [AdminController::class, 'stopImpersonate'])->name('users.stop_impersonate');
 
         // Broadcasts
         Route::get('broadcasts', [BroadcastMessageController::class, 'index'])->name('broadcasts.index');
@@ -68,45 +82,43 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('broadcasts/{broadcast}', [BroadcastMessageController::class, 'destroy'])->name('broadcasts.destroy');
     });
 
-    // ===================== LOAN MANAGER ROUTES =====================
-    Route::middleware(CheckSubscriptionStatus::class)->group(function () {
+    // ---------------------------------------------------------
+    // LOAN MANAGER ROUTES (Protected by 'subscription' Check)
+    // ---------------------------------------------------------
+    Route::middleware(['subscription'])->group(function () {
 
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-        // Profile
+        // User Profile
         Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
         Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
         
-        // --- NEW: ELEVATED PRIVILEGE ROUTES ---
+        // Elevated Privileges (for editing past transactions)
         Route::post('/manager/elevate/login', [ElevateController::class, 'login'])->name('manager.elevate.login');
         Route::post('/manager/elevate/logout', [ElevateController::class, 'logout'])->name('manager.elevate.logout');
-        // -------------------------------------
 
         // Clients
+        Route::post('/clients/check-global', [ClientController::class, 'checkGlobal'])->name('clients.check-global');
         Route::resource('clients', ClientController::class);
         Route::get('/clients/{client}/ledger', [ClientController::class, 'showLedger'])->name('clients.ledger');
 
         // Loans
         Route::get('/loans/calculator', [LoanController::class, 'showCalculator'])->name('loans.showCalculator');
-        Route::get('/loans/{loan}/download-agreement', [LoanController::class, 'downloadLoanAgreement'])
-            ->name('loans.downloadAgreement');
-        Route::patch('/loans/{loan}/status', [LoanController::class, 'updateStatus'])
-            ->name('loans.update-status');
+        Route::get('/loans/{loan}/download-agreement', [LoanController::class, 'downloadLoanAgreement'])->name('loans.downloadAgreement');
+        Route::patch('/loans/{loan}/status', [LoanController::class, 'updateStatus'])->name('loans.update-status');
         Route::resource('loans', LoanController::class);
-
 
         // Payments
         Route::resource('payments', PaymentController::class);
         Route::get('/payments/{payment}/receipt', [PaymentController::class, 'showReceipt'])->name('payments.receipt');
 
-
         // Guarantors & Collaterals
         Route::post('/guarantors', [GuarantorController::class, 'store'])->name('guarantors.store');
         Route::post('/collaterals', [CollateralController::class, 'store'])->name('collaterals.store');
 
-        // Bank, Cash, and Expenses
+        // Finances (Bank, Cash, Expenses)
         Route::resource('bank-transactions', BankTransactionController::class)->only(['index', 'store'])->names('bank-transactions');
-        Route::resource('expenses', ExpenseController::class)->only(['index', 'store'])->names('expenses');
+        Route::resource('expenses', ExpenseController::class)->only(['index', 'store', 'create', 'edit', 'update', 'destroy'])->names('expenses');
         Route::resource('cash-transactions', CashTransactionController::class)->only(['index', 'store'])->names('cash-transactions');
 
         // Reports
@@ -121,5 +133,83 @@ Route::middleware(['auth'])->group(function () {
             Route::get('loan-aging', [ReportController::class, 'loanAging'])->name('loan-aging');
             Route::get('print-forms', [ReportController::class, 'showPrintForms'])->name('print-forms');
         });
+
+        // Settings & Staff (Moved inside Subscription Group)
+        Route::prefix('manager')->name('manager.')->group(function () {
+            // Settings
+            Route::get('/settings', [BusinessSettingsController::class, 'edit'])->name('settings.edit');
+            Route::put('/settings', [BusinessSettingsController::class, 'update'])->name('settings.update');
+            
+            // Staff / Cashier Management
+            Route::get('/staff', [StaffController::class, 'index'])->name('staff.index');
+            Route::post('/staff', [StaffController::class, 'store'])->name('staff.store');
+            Route::delete('/staff/{id}', [StaffController::class, 'destroy'])->name('staff.destroy');
+        });
     });
+});
+
+
+// =============================================================
+// DATABASE FIXERS & UTILITIES (Run these once if needed)
+// =============================================================
+
+Route::get('/fix-database', function() {
+    try {
+        // Fix Clients FK
+        try { Schema::table('clients', fn($t) => $t->dropForeign('clients_loan_manager_id_foreign')); } catch (\Exception $e) {}
+        Schema::table('clients', fn($t) => $t->foreign('loan_manager_id')->references('id')->on('loan_managers')->onDelete('cascade'));
+
+        // Fix Loans FK
+        try { Schema::table('loans', fn($t) => $t->dropForeign('loans_loan_manager_id_foreign')); } catch (\Exception $e) {}
+        Schema::table('loans', fn($t) => $t->foreign('loan_manager_id')->references('id')->on('loan_managers')->onDelete('cascade'));
+
+        return "SUCCESS! Database Fixed.";
+    } catch (\Exception $e) { return "Error: " . $e->getMessage(); }
+});
+
+Route::get('/fix-transaction-tables', function() {
+    $results = "";
+    $tables = ['bank_transactions', 'cash_transfers', 'expenses'];
+    foreach ($tables as $tableName) {
+        if (!Schema::hasTable($tableName)) continue;
+        try {
+            Schema::table($tableName, fn($t) => $t->dropForeign($tableName . '_loan_manager_id_foreign'));
+        } catch (\Exception $e) {}
+        try {
+            Schema::table($tableName, fn($t) => $t->foreign('loan_manager_id')->references('id')->on('loan_managers')->onDelete('cascade'));
+            $results .= "$tableName fixed. ";
+        } catch (\Exception $e) { $results .= "$tableName error: " . $e->getMessage(); }
+    }
+    return $results;
+});
+
+Route::get('/update-db-v3-cashiers', function () {
+    // 1. Add Opening Balance to Loan Managers
+    if (!Schema::hasColumn('loan_managers', 'opening_balance')) {
+        Schema::table('loan_managers', function (Blueprint $table) {
+            $table->decimal('opening_balance', 15, 2)->default(0)->after('company_logo');
+        });
+    }
+    // 2. Add Role and Link to Users table (for Cashiers)
+    Schema::table('users', function (Blueprint $table) {
+        if (!Schema::hasColumn('users', 'role')) {
+            $table->string('role')->default('manager')->after('email'); 
+        }
+        if (!Schema::hasColumn('users', 'loan_manager_id')) {
+            $table->unsignedBigInteger('loan_manager_id')->nullable()->after('role');
+        }
+    });
+    return "SUCCESS: Cashier/Balance columns added.";
+});
+
+Route::get('/fix-database-columns', function () {
+    $tableName = 'loan_managers';
+    Schema::table($tableName, function (Blueprint $table) use ($tableName) {
+        if (!Schema::hasColumn($tableName, 'company_name')) $table->string('company_name')->nullable();
+        if (!Schema::hasColumn($tableName, 'company_address')) $table->string('company_address')->nullable();
+        if (!Schema::hasColumn($tableName, 'company_phone')) $table->string('company_phone')->nullable();
+        if (!Schema::hasColumn($tableName, 'company_email')) $table->string('company_email')->nullable();
+        if (!Schema::hasColumn($tableName, 'company_logo')) $table->string('company_logo')->nullable();
+    });
+    return 'SUCCESS: Settings columns fixed.';
 });

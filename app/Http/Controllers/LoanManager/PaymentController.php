@@ -8,6 +8,7 @@ use App\Models\Payment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class PaymentController extends Controller
 {
@@ -27,7 +28,6 @@ class PaymentController extends Controller
     {
         $manager = Auth::user()->loanManager;
         
-        // Eager load client info, only show loans that aren't fully closed/paid
         $loans = $manager->loans()
                          ->where('status', '!=', 'paid')
                          ->with('client')
@@ -54,12 +54,11 @@ class PaymentController extends Controller
 
         $loan = Loan::findOrFail($validated['loan_id']);
         
-        // 1. Security Check
         if ($loan->loan_manager_id != $manager->id) {
              abort(403, 'Unauthorized: Loan access forbidden.');
         }
 
-        // 2. Calculate Balance (Robust Method)
+        // Calculate Balance
         $principal = $loan->principal_amount;
         $interest = $principal * ($loan->interest_rate / 100);
         $totalRepayable = $principal + $interest;
@@ -68,8 +67,8 @@ class PaymentController extends Controller
         
         $paymentAmount = $validated['amount_paid'];
 
-        // 3. Overpayment Check
-        if ($paymentAmount > ($remainingBalance + 100)) { // Small buffer for rounding differences
+        // Overpayment Check
+        if ($paymentAmount > ($remainingBalance + 100)) { 
             return back()->withInput()->with('error', 
                 "Payment failed: Amount ({$currency} " . number_format($paymentAmount) . 
                 ") exceeds the remaining balance ({$currency} " . number_format($remainingBalance) . ")."
@@ -81,18 +80,16 @@ class PaymentController extends Controller
         try {
             DB::transaction(function () use ($validated, $loan, $paymentAmount, $remainingBalance, &$payment) {
                 
-                // Create Payment
                 $payment = Payment::create([
                     'loan_id' => $validated['loan_id'],
                     'amount_paid' => $paymentAmount,
                     'payment_date' => $validated['payment_date'],
                     'payment_method' => $validated['payment_method'],
                     'notes' => $validated['notes'] ?? null,
-                    'receipt_number' => 'RCP-' . strtoupper(uniqid()), // Using uniqid is safer than time() for collisions
+                    'receipt_number' => 'RCP-' . strtoupper(uniqid()), 
                 ]);
 
-                // Update Status
-                // If remaining balance after this payment is zero or less, mark paid
+                // Update Loan Status
                 if (($remainingBalance - $paymentAmount) <= 0) {
                     $loan->update(['status' => 'paid']);
                 }
@@ -109,22 +106,24 @@ class PaymentController extends Controller
     // --- SHOW RECEIPT ---
     public function showReceipt(Payment $payment)
     {
-         if ($payment->loan->loan_manager_id !== auth()->user()->loanManager->id) {
+         if ($payment->loan->loan_manager_id !== Auth::user()->loanManager->id) {
              abort(403);
          }
 
-         // Load relationships for the view
          $payment->load('loan.client', 'loan.loanManager');
 
-         return view('loan-manager.payments.receipt-thermal', [
-             'payment' => $payment
-         ]);
+         // Ensure you have a view for this, otherwise redirect or dump
+         if (view()->exists('loan-manager.payments.receipt-thermal')) {
+             return view('loan-manager.payments.receipt-thermal', compact('payment'));
+         }
+         
+         // Fallback if thermal view doesn't exist
+         return redirect()->route('loans.show', $payment->loan_id)->with('success', 'Payment recorded.');
     }
 
-    // --- NEW: EDIT PAYMENT FORM ---
+    // --- EDIT PAYMENT FORM ---
     public function edit(Payment $payment)
     {
-        // Security Check
         if ($payment->loan->loan_manager_id !== Auth::user()->loanManager->id) {
             abort(403, 'Unauthorized');
         }
@@ -132,10 +131,9 @@ class PaymentController extends Controller
         return view('loan-manager.payments.edit', compact('payment'));
     }
 
-    // --- NEW: UPDATE PAYMENT LOGIC ---
+    // --- UPDATE PAYMENT LOGIC ---
     public function update(Request $request, Payment $payment)
     {
-        // Security Check
         if ($payment->loan->loan_manager_id !== Auth::user()->loanManager->id) {
             abort(403, 'Unauthorized');
         }
@@ -145,47 +143,73 @@ class PaymentController extends Controller
             'payment_date' => 'required|date',
             'payment_method' => 'required|string',
             'notes' => 'nullable|string',
+            'receipt_number' => 'nullable|string|max:50', // Added validation for Receipt Number
         ]);
 
         try {
             DB::transaction(function () use ($payment, $validated) {
-                // 1. Update the payment details
+                
+                // 1. Update Details
                 $payment->update([
                     'amount_paid' => $validated['amount_paid'],
                     'payment_date' => $validated['payment_date'],
                     'payment_method' => $validated['payment_method'],
-                    'notes' => $validated['notes']
+                    'notes' => $validated['notes'],
+                    // Only update receipt_number if provided, else keep existing
+                    'receipt_number' => $validated['receipt_number'] ?? $payment->receipt_number
                 ]);
 
                 // 2. Re-evaluate Loan Status
-                // We must recalculate everything because the amount might have changed
                 $loan = $payment->loan;
-                
                 $principal = $loan->principal_amount;
                 $interest = $principal * ($loan->interest_rate / 100);
                 $totalDue = $principal + $interest;
-                
-                // Sum all payments (including the one we just updated)
                 $totalPaid = $loan->payments()->sum('amount_paid');
 
                 if ($totalPaid >= $totalDue) {
-                    // If fully paid, ensure status is paid
                     if ($loan->status !== 'paid') {
                         $loan->update(['status' => 'paid']);
                     }
                 } else {
-                    // If balance remains, ensure status is NOT paid
                     if ($loan->status === 'paid') {
                         $loan->update(['status' => 'active']);
                     }
                 }
             });
 
-            return redirect()->route('payments.receipt', $payment->id)
+            // Redirect back to Loan Details (Usually more useful after editing than the receipt)
+            return redirect()->route('loans.show', $payment->loan_id)
                              ->with('success', 'Payment updated successfully.');
 
         } catch (\Exception $e) {
             return back()->withInput()->with('error', 'Update Failed: ' . $e->getMessage());
         }
+    }
+
+    // --- DESTROY PAYMENT ---
+    public function destroy(Payment $payment)
+    {
+        if ($payment->loan->loan_manager_id !== Auth::user()->loanManager->id) {
+            abort(403, 'Unauthorized');
+        }
+
+        $loan = $payment->loan;
+        
+        DB::transaction(function() use ($payment, $loan) {
+            $payment->delete();
+
+            // Re-evaluate Loan Status after deletion
+            $principal = $loan->principal_amount;
+            $interest = $principal * ($loan->interest_rate / 100);
+            $totalDue = $principal + $interest;
+            $totalPaid = $loan->payments()->sum('amount_paid'); // This sum will now exclude the deleted payment
+
+            if ($totalPaid < $totalDue && $loan->status === 'paid') {
+                $loan->update(['status' => 'active']);
+            }
+        });
+
+        return redirect()->route('loans.show', $loan->id)
+            ->with('success', 'Payment deleted successfully.');
     }
 }

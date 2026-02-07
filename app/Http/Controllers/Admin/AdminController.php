@@ -3,128 +3,154 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
-use App\Models\LoanManager; 
 use Illuminate\Http\Request;
+use App\Models\User;
+use App\Models\LoanManager;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\DB;
 
 class AdminController extends Controller
 {
     /**
-     * Display the Admin dashboard.
+     * Display the Admin Dashboard with the list of managers.
      */
     public function index()
     {
-        $managers = User::where('user_type', 'loan_manager')->with('loanManager')->get();
-        $totalLoanedAmount = \App\Models\Loan::sum('principal_amount') ?? 0;
-        $loanManagerCount = $managers->count();
-        $clientCount = \App\Models\Client::count() ?? 0;
-        $totalLoans = \App\Models\Loan::count() ?? 0;
+        // Fetch all users who are loan managers or have a manager profile
+        $managers = User::where('user_type', 'loan_manager')
+                        ->orWhereHas('loanManager')
+                        ->with('loanManager')
+                        ->latest()
+                        ->get();
+
+        return view('admin.dashboard', compact('managers'));
+    }
+
+    /**
+     * Activate a pending manager and set their settings.
+     */
+    public function activate(Request $request, $id)
+    {
+        $manager = User::findOrFail($id);
         
-        return view('admin.dashboard', [
-            'managers' => $managers,
-            'totalLoanedAmount' => $totalLoanedAmount,
-            'loanManagerCount' => $loanManagerCount,
-            'clientCount' => $clientCount,
-            'totalLoans' => $totalLoans,
-        ]);
-    }
-
-    /**
-     * Update settings for a loan manager (Activate/Suspend, Currency, Phone).
-     */
-    public function updateSettings(User $manager, Request $request)
-    {
-        $validated = $request->validate([
-            'is_active' => 'required|boolean',
-            'currency_symbol' => 'required|string|in:UGX,RWF',
-            'support_phone' => 'required|string|max:20',
-        ]);
-
-        $loanManagerProfile = $manager->loanManager;
-        if (!$loanManagerProfile) {
-            return back()->with('error', 'Loan Manager profile not found for this user.');
-        }
-
-        $loanManagerProfile->update($validated);
-
-        $status = $validated['is_active'] ? 'activated' : 'suspended';
-        return back()->with('status', 'Manager ' . $manager->name . ' has been ' . $status . ' and settings saved.');
-    }
-
-    /**
-     * ✅ Activate a loan manager.
-     */
-    public function activate($managerId)
-    {
-        $manager = User::findOrFail($managerId);
-
-        // Check if it’s a loan manager
-        if ($manager->user_type !== 'loan_manager') {
-            return back()->with('error', 'You can only activate loan managers.');
-        }
-
-        $manager->is_active = true;
-        $manager->save();
-
         if ($manager->loanManager) {
-            $manager->loanManager->update(['is_active' => true]);
+            $manager->loanManager->update([
+                'is_active' => 1,
+                'currency_symbol' => $request->input('currency_symbol', 'UGX'),
+                'support_phone' => $request->input('support_phone'),
+            ]);
         }
 
-        return back()->with('success', 'Manager ' . $manager->name . ' activated successfully.');
+        return back()->with('success', 'Manager account activated successfully.');
     }
 
     /**
-     * ✅ Suspend a loan manager.
+     * Suspend a manager's access.
      */
-    public function suspend($managerId)
+    public function suspend($id)
     {
-        $manager = User::findOrFail($managerId);
-
-        if ($manager->user_type !== 'loan_manager') {
-            return back()->with('error', 'You can only suspend loan managers.');
-        }
-
-        $manager->is_active = false;
-        $manager->save();
-
-        if ($manager->loanManager) {
-            $manager->loanManager->update(['is_active' => false]);
-        }
-
-        return back()->with('success', 'Manager ' . $manager->name . ' suspended successfully.');
-    }
-
-    /**
-     * Impersonate (Login As) a loan manager.
-     */
-    public function impersonate(User $manager)
-    {
-        // Security Check: Admin can't impersonate another Admin
-        if ($manager->user_type === 'admin') {
-             return back()->with('error', 'Cannot impersonate another admin.');
-        }
+        $manager = User::findOrFail($id);
         
-        Session::put('original_admin_id', Auth::id());
-        Auth::login($manager);
-        return redirect()->route('dashboard')->with('status', 'Logged in as ' . $manager->name);
+        if ($manager->loanManager) {
+            $manager->loanManager->update(['is_active' => 0]);
+        }
+
+        return back()->with('warning', 'Manager account has been suspended.');
     }
 
     /**
-     * Stop impersonating.
+     * Update manager settings (Currency/Support Phone).
+     */
+    public function update(Request $request, $id)
+    {
+        $manager = User::findOrFail($id);
+        
+        if ($manager->loanManager) {
+            $manager->loanManager->update([
+                'currency_symbol' => $request->input('currency_symbol'),
+                'support_phone' => $request->input('support_phone'),
+                'is_active' => $request->has('is_active') ? 1 : $manager->loanManager->is_active,
+            ]);
+        }
+
+        return back()->with('success', 'Manager settings updated successfully.');
+    }
+
+    /**
+     * Delete a manager and ALL their associated data.
+     */
+    public function destroy($id)
+    {
+        $managerProfile = LoanManager::findOrFail($id);
+        $user = $managerProfile->user;
+
+        try {
+            DB::transaction(function () use ($managerProfile, $user) {
+                // 1. Get all loan IDs belonging to this manager
+                $loanIds = $managerProfile->loans()->pluck('id');
+
+                // 2. Delete children of Loans (Collaterals, Guarantors, Payments)
+                DB::table('collaterals')->whereIn('loan_id', $loanIds)->delete();
+                DB::table('guarantors')->whereIn('loan_id', $loanIds)->delete();
+                DB::table('payments')->whereIn('loan_id', $loanIds)->delete();
+                
+                if (DB::getSchemaBuilder()->hasTable('repayment_schedules')) {
+                    DB::table('repayment_schedules')->whereIn('loan_id', $loanIds)->delete();
+                }
+
+                // 3. Delete Loans
+                $managerProfile->loans()->delete();
+
+                // 4. Delete Clients
+                $managerProfile->clients()->delete();
+
+                // 5. Delete other associated data
+                $managerProfile->expenses()->delete();
+                $managerProfile->bankTransactions()->delete();
+                $managerProfile->cashTransactions()->delete();
+
+                // 6. Delete the Profile and the User
+                $managerProfile->delete();
+                if ($user) {
+                    $user->delete();
+                }
+            });
+
+            return back()->with('success', 'Manager and all associated records deleted successfully.');
+
+        } catch (\Exception $e) {
+            return back()->with('error', 'Failed to delete: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Impersonate (Login As) Fix
+     */
+    public function impersonate($id)
+    {
+        $user = User::findOrFail($id);
+        
+        // Store the Admin's ID in the session before switching
+        session()->put('original_admin_id', Auth::id());
+        
+        Auth::login($user);
+        
+        return redirect()->route('dashboard');
+    }
+
+    /**
+     * Stop impersonating and return to Admin Panel.
      */
     public function stopImpersonate()
     {
-        $originalAdminId = Session::pull('original_admin_id');
-        if (!$originalAdminId) {
-            return redirect()->route('login');
+        $adminId = session()->get('original_admin_id');
+        
+        if ($adminId) {
+            $admin = User::find($adminId);
+            Auth::login($admin);
+            session()->forget('original_admin_id');
         }
-        $originalAdmin = User::find($originalAdminId);
-        if ($originalAdmin) {
-            Auth::login($originalAdmin);
-            return redirect()->route('admin.dashboard')->with('status', 'Logged back in as Admin.');
-        }
-        return redirect()->route('login');
+
+        return redirect()->route('admin.dashboard');
     }
 }

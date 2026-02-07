@@ -5,75 +5,87 @@ namespace App\Http\Controllers\LoanManager;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\Rule; // Required for email validation
-use Illuminate\Support\Facades\Storage; // Required for deleting old logo
+use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Hash;
 
 class ProfileController extends Controller
 {
     /**
      * Show the form for editing the loan manager's profile.
-     * The LoanManager model is accessed via the User model's relationship.
      */
     public function edit()
     {
-        $manager = Auth::user()->loanManager;
-        return view('loan-manager.profile.edit', compact('manager'));
+        $user = Auth::user();
+        $manager = $user->loanManager;
+        return view('loan-manager.profile.edit', compact('user', 'manager'));
     }
 
     /**
-     * Update the manager's profile information (User and LoanManager tables).
+     * Update the manager's profile information.
      */
     public function update(Request $request)
     {
-        $user = Auth::user(); // Get the authenticated User model instance
-        $manager = $user->loanManager; // Get the related LoanManager model instance
+        $user = Auth::user();
+        $manager = $user->loanManager;
 
-        // --- Validation for all required fields ---
+        // --- Validation ---
         $validated = $request->validate([
-            // User Fields (Mandatory, updated from the Blade file)
+            // Personal User Details
             'name' => 'required|string|max:255',
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
-            'phone_number' => 'required|string|max:20',
-            'address' => 'required|string|max:255',
-
-            // Loan Manager Fields
-            'company_name' => 'nullable|string|max:255',
-            'company_phone' => 'nullable|string|max:20',
-            'currency_symbol' => 'required|string|max:10', // Field assumed from the Blade template
+            'password' => 'nullable|confirmed|min:8',
+            
+            // Business Details (For Receipt)
+            'company_name' => 'required|string|max:255',
+            'phone_number' => 'required|string|max:20', 
+            'address' => 'required|string|max:255',      
             'company_logo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            
+            // Financials
+            'opening_balance' => 'nullable|numeric|min:0', // NEW FIELD Added here
         ]);
 
-        // --- Handle Logo Upload and Deletion ---
+        // --- 1. Handle Logo Upload ---
         if ($request->hasFile('company_logo')) {
-            // 1. Delete the old logo if a path exists
-            if ($manager->company_logo_path) {
-                // Check if file exists before attempting to delete
-                if (Storage::disk('public')->exists($manager->company_logo_path)) {
-                    Storage::disk('public')->delete($manager->company_logo_path); 
-                }
+            // Delete old logo if exists
+            if ($manager->company_logo_path && Storage::disk('public')->exists($manager->company_logo_path)) {
+                Storage::disk('public')->delete($manager->company_logo_path); 
             }
-            
-            // 2. Store the new logo and update the path in the manager record
+            // Store new logo
             $path = $request->file('company_logo')->store('logos', 'public');
             $manager->company_logo_path = $path;
         }
 
-        // --- Update Records ---
-        
-        // Update the core User record
-        $user->update([
+        // --- 2. Update User Record (Login Info) ---
+        $userData = [
             'name' => $validated['name'],
             'email' => $validated['email'],
-            'phone_number' => $validated['phone_number'],
-            'address' => $validated['address'],
-        ]);
+        ];
 
-        // Update the LoanManager record
-        $manager->company_name = $validated['company_name'] ?? $manager->company_name;
-        $manager->company_phone = $validated['company_phone'] ?? $manager->company_phone;
-        $manager->currency_symbol = $validated['currency_symbol']; 
-        $manager->save();
+        // Only update password if provided
+        if ($request->filled('password')) {
+            $userData['password'] = Hash::make($request->password);
+        }
+        $user->update($userData);
 
-        return redirect()->route('profile.edit')->with('status', 'Profile updated successfully!');
+        // --- 3. Update LoanManager Record (Receipt Info & Financials) ---
+        if ($manager) {
+            $manager->company_name = $validated['company_name'];
+            $manager->phone_number = $validated['phone_number']; 
+            $manager->address = $validated['address']; 
+            
+            // Save Opening Balance
+            $manager->opening_balance = $request->input('opening_balance', 0);
+            
+            // Preserve your currency symbol logic
+            if ($request->has('currency_symbol')) {
+                $manager->currency_symbol = $request->input('currency_symbol');
+            }
+            
+            $manager->save();
+        }
+
+        return back()->with('success', 'Profile and Financial details updated successfully!');
     }
 }

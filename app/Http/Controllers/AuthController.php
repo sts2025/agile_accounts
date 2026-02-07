@@ -2,19 +2,21 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
-use App\Models\Account;
-use App\Models\LoanManager;
+use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rules;
+use App\Models\User;
 
 class AuthController extends Controller
 {
-    public function showLoginForm() { return view('auth.login'); }
+    public function showLoginForm()
+    {
+        return view('auth.login');
+    }
 
     public function login(Request $request)
     {
@@ -27,19 +29,32 @@ class AuthController extends Controller
             $request->session()->regenerate();
             $user = Auth::user();
 
-            if ($user->user_type === 'admin') {
+            // 1. ADMIN CHECK (Allow ID 1 or user_type admin)
+            if ($user->id === 1 || $user->user_type === 'admin') {
+                session()->forget('original_admin_id');
                 return redirect()->route('admin.dashboard');
             }
 
-            if ($user->user_type === 'loan_manager' && $user->loanManager && $user->loanManager->is_active) {
+            // 2. LOAN MANAGER ACTIVATION CHECK
+            // We check if the Admin has assigned a currency yet.
+            // If currency is Empty (''), the account is still Pending.
+            if ($user->loanManager && !empty($user->loanManager->currency_symbol)) {
                 return redirect()->intended('dashboard');
             }
 
+            // 3. IF PENDING (Currency not set by Admin yet)
             Auth::logout();
-            return back()->withErrors(['email' => 'Your account is not active or has been suspended. Please contact support.']);
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return back()->withErrors([
+                'email' => 'Your account is waiting for Admin approval/activation.',
+            ]);
         }
 
-        return back()->withErrors(['email' => 'The provided credentials do not match our records.']);
+        return back()->withErrors([
+            'email' => 'The provided credentials do not match our records.',
+        ]);
     }
 
     public function logout(Request $request)
@@ -49,10 +64,12 @@ class AuthController extends Controller
         $request->session()->regenerateToken();
         return redirect('/login');
     }
-    
-    public function create() { return view('auth.register'); }
 
-    
+    public function create()
+    {
+        return view('auth.register');
+    }
+
     public function store(Request $request)
     {
         $request->validate([
@@ -64,8 +81,9 @@ class AuthController extends Controller
         ]);
 
         try {
-            $user = DB::transaction(function () use ($request) {
+            DB::transaction(function () use ($request) {
                 
+                // 1. Create User Account
                 $user = User::create([
                     'name' => $request->name,
                     'email' => $request->email,
@@ -73,26 +91,26 @@ class AuthController extends Controller
                     'user_type' => 'loan_manager',
                 ]);
 
-                $manager = $user->loanManager()->create([
+                // 2. Create Loan Manager Profile
+                $user->loanManager()->create([
                     'company_name'      => $request->name, 
                     'phone_number'      => $request->phone_number,
                     'address'           => $request->address,
-                    'is_active'         => 0, // Set to inactive by default
-                    'currency_symbol'   => 'UGX', 
+                    
+                    // FIX FOR DB ERROR 1: Use phone as initial support phone
+                    'support_phone'     => $request->phone_number, 
+
+                    // FIX FOR DB ERROR 2: Use empty string instead of NULL.
+                    // The DB likely has "NOT NULL" constraint on this column.
+                    'currency_symbol'   => '', 
                 ]);
-
-                // The broken function call has been correctly removed.
-
-                return $user;
             });
 
-            return redirect()->route('login')->with('success', 'Registration successful! Your account is pending admin activation.');
+            return redirect()->route('login')->with('success', 'Registration successful! Please wait for the Admin to activate your account.');
 
         } catch (\Exception $e) {
             Log::error('REGISTRATION FAILED: ' . $e->getMessage());
-            return back()->withInput()->with('error', 'Registration failed due to a server error. Please try again.');
+            return back()->withInput()->with('error', 'Registration failed. Please try again.');
         }
     }
-
-    // The broken 'createDefaultAccountsForManager' function has been correctly removed.
 }

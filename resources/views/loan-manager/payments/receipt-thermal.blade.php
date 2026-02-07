@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Receipt #{{ $payment->reference_id ?? $payment->id }}</title>
     <style>
-        /* General styles, mostly unchanged from previous versions, ensuring thermal look */
+        /* THERMAL PRINTER STYLING */
         body {
             font-family: 'Courier New', Courier, monospace;
             font-size: 13px;
@@ -26,13 +26,10 @@
             height: fit-content;
         }
         
-        /* Utility Classes */
         .text-center { text-align: center; }
-        .text-right { text-align: right; }
         .font-bold { font-weight: bold; }
         .uppercase { text-transform: uppercase; }
         
-        /* Dividers */
         .dashed-line {
             border-top: 1px dashed #000;
             margin: 8px 0;
@@ -51,8 +48,14 @@
             font-weight: bold;
         }
 
-        /* Elements */
-        .header h2 { margin: 0; font-size: 16px; font-weight: 900; }
+        /* Updated Header Styles for Logo */
+        .header img.logo {
+            max-width: 80px;
+            max-height: 80px;
+            display: block;
+            margin: 0 auto 10px auto;
+        }
+        .header h2 { margin: 0; font-size: 16px; font-weight: 900; line-height: 1.2; }
         .header p { margin: 2px 0; font-size: 11px; }
         
         .info-row {
@@ -64,7 +67,6 @@
         .label { font-size: 12px; }
         .value { font-size: 12px; font-weight: bold; text-align: right; }
 
-        /* Signatures */
         .sig-box { margin-top: 25px; }
         .sig-line {
             border-bottom: 1px dotted #000;
@@ -73,7 +75,6 @@
             margin-bottom: 5px;
         }
 
-        /* Buttons */
         .no-print {
             margin-top: 20px;
             display: flex;
@@ -107,15 +108,15 @@
 <body>
 
     @php
-        // --- 1. RELATIONSHIP FIX ---
         $loan = $payment->loan;
-        // CHANGED: optional($loan)->manager TO optional($loan)->loanManager
-        // This matches the relationship used in PaymentController: $payment->load('loan.loanManager')
-        $manager = optional($loan)->loanManager; 
         
-        $currency = optional($manager)->currency_symbol ?? 'UGX';
+        // FIX: Forcefully get the current logged-in manager if the loan relationship fails
+        // This ensures the custom settings you just saved are loaded.
+        $manager = $loan->loanManager ?? Auth::user()->loanManager; 
         
-        // --- FINANCIAL CALCULATION ---
+        $currency = $manager->currency_symbol ?? 'UGX';
+        
+        // Financials
         $calculatedInterest = optional($loan)->principal_amount * (optional($loan)->interest_rate / 100);
         $interestAmount = optional($loan)->interest_amount ?? $calculatedInterest ?? 0;
         
@@ -123,34 +124,48 @@
         $totalPaid = $payment->loan->payments->sum('amount_paid'); 
         $loan_balance = $totalRepayable - $totalPaid; 
         
-        $loan_arrears = optional($loan)->arrears ?? 0;
         $principal_amount = number_format(optional($loan)->principal_amount ?? 0, 0, '.', '');
         
-        // --- DATE TAKEN FIX ---
         $date_taken = 'N/A';
-        $raw_date = optional($loan)->disbursement_date ?? optional($loan)->start_date; // fallback to start_date
+        $raw_date = optional($loan)->disbursement_date ?? optional($loan)->start_date;
         if ($raw_date) {
-            try {
-                $date_taken = date('d-m-Y', strtotime($raw_date));
-            } catch (\Exception $e) {}
+            try { $date_taken = date('d-m-Y', strtotime($raw_date)); } catch (\Exception $e) {}
         }
         
-        $status = optional($loan)->status ?? 'N/A';
-        
-        // Client details
+        // Client Contact
         $client = optional($loan)->client;
         $client_phone = optional($client)->phone_number ?? 'N/A';
-        $manager_phone = optional($manager)->phone_number ?? 'N/A'; // matched column name
+        
+        // --- COMPANY DETAILS ---
+        // We prioritize the specific fields you added in Settings (company_name, etc.)
+        // If those are empty, we fall back to the generic manager profile data.
+        $companyName = $manager->company_name ?? optional($manager->user)->name ?? 'LOAN MANAGER';
+        $companyPhone = $manager->company_phone ?? $manager->phone_number ?? 'N/A';
+        $companyAddress = $manager->company_address ?? $manager->address ?? 'Main Branch';
+        $companyEmail = $manager->company_email ?? null;
+        $companyLogo = $manager->company_logo ?? null;
     @endphp
 
     <div class="receipt-wrapper">
         
         <!-- 1. COMPANY HEADER -->
         <div class="header text-center">
-            {{-- FIX: Using business_name to match your database --}}
-            <h2 class="uppercase">{{ optional($manager)->business_name ?? optional(optional($manager)->user)->name ?? 'LOAN MANAGER' }}</h2>
-            <p>{{ optional($manager)->address ?? 'Main Branch' }}</p>
-            <p>{{ $manager_phone }}</p>
+            {{-- Dynamic Logo --}}
+            @if($companyLogo)
+                <img src="{{ asset('storage/' . $companyLogo) }}" alt="Logo" class="logo">
+            @endif
+
+            {{-- Company Name --}}
+            <h2 class="uppercase">{{ $companyName }}</h2>
+            
+            {{-- Address --}}
+            <p>{{ $companyAddress }}</p>
+            
+            {{-- Contact Info --}}
+            <p>Tel: {{ $companyPhone }}</p>
+            @if($companyEmail)
+                <p>Email: {{ $companyEmail }}</p>
+            @endif
             
             <div class="double-line"></div>
             <p class="font-bold uppercase">*** PAYMENT RECEIPT ***</p>
@@ -161,12 +176,11 @@
         <div class="loan-details">
             <div class="info-row">
                 <span class="label">Receipt No:</span>
-                {{-- FIX: Using reference_id as primary receipt number --}}
-                <span class="value">{{ $payment->reference_id ?? $payment->receipt_number }}</span>
+                <span class="value">{{ $payment->receipt_number ?? $payment->reference_id ?? str_pad($payment->id, 6, '0', STR_PAD_LEFT) }}</span>
             </div>
             
             <div class="info-row">
-                <span class="label">Loan ID:</span>
+                <span class="label">Loan Ref:</span>
                 <span class="value">{{ optional($loan)->reference_id ?? '#'.$payment->loan_id }}</span>
             </div>
 
@@ -188,11 +202,6 @@
             </div>
             
             <div class="info-row">
-                <span class="label">Interest:</span>
-                <span class="value">{{ $currency }} {{ number_format($interestAmount, 0) }}</span>
-            </div>
-
-            <div class="info-row">
                 <span class="label">Date Given:</span>
                 <span class="value">{{ $date_taken }}</span>
             </div>
@@ -205,7 +214,7 @@
 
         <div class="quad-star">***** PAID *****</div>
 
-        <!-- 3. PAYMENT FINANCIALS SECTION -->
+        <!-- 3. PAYMENT FINANCIALS -->
         <div class="financials">
             <div class="info-row" style="font-size: 16px; margin: 10px 0;">
                 <span class="label font-bold">AMOUNT PAID:</span>
@@ -235,10 +244,9 @@
         </div>
 
         <div class="text-center" style="margin-top: 20px; font-size: 10px;">
-            Thank you for your business!
+            Thank you for doing business with us!
         </div>
 
-        <!-- 5. ACTIONS (Non-Printable) -->
         <div class="no-print">
             <button onclick="window.print()" class="btn btn-print">Print Receipt</button>
             <a href="{{ route('loans.show', $loan->id) }}" class="btn btn-back">Back to Loan</a>

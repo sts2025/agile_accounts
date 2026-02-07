@@ -37,7 +37,6 @@ class ReportController extends Controller
         $loansGiven = $manager->loans()->whereDate('start_date', $reportDate)->with('client')->get();
         $paymentsReceived = $manager->payments()->whereDate('payment_date', $reportDate)->with('loan.client')->get();
 
-        // Include Cash Transactions for the day
         $cashInflows = $manager->cashTransactions()->where('type', 'inflow')->whereDate('transaction_date', $reportDate)->get();
         $cashOutflows = $manager->cashTransactions()->where('type', 'outflow')->whereDate('transaction_date', $reportDate)->get();
 
@@ -97,13 +96,12 @@ class ReportController extends Controller
             (object)[ 'name' => 'Processing Fee Income', 'period_total' => $totalProcessingFee ],
         ]);
 
-        // 3. Other Inflows (categorized as Income)
-        // FIX: Changed 'receivable' to 'inflow' to match CashTransactionController
+        // 3. Other Inflows
         $otherIncome = $manager->cashTransactions()
             ->where('type', 'inflow')
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->get()
-            ->groupBy('description') // Fallback to description as category column might be missing
+            ->groupBy('description') 
             ->map(function ($group, $name) {
                 return (object)['name' => $name ?: 'Other Income', 'period_total' => $group->sum('amount')];
             })->values();
@@ -123,13 +121,12 @@ class ReportController extends Controller
                 return (object)['name' => $categoryName, 'period_total' => $group->sum('amount')];
             })->values();
 
-        // 2. Outflows (Payables/Expenses from CashTransactions)
-        // FIX: Changed 'payable' to 'outflow'
+        // 2. Outflows
         $otherExpenses = $manager->cashTransactions()
             ->where('type', 'outflow')
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->get()
-            ->groupBy('description') // Fallback to description
+            ->groupBy('description')
             ->map(function ($group, $name) {
                 return (object)['name' => $name ?: 'General Expenses', 'period_total' => $group->sum('amount')];
             })->values();
@@ -163,12 +160,13 @@ class ReportController extends Controller
     public function balanceSheet(Request $request)
     {
         $manager = auth()->user()->loanManager;
+        // Ensure we refresh the manager to get the latest opening_balance
+        $manager->refresh();
+        
         $reportDate = $request->input('report_date', now()->toDateString());
 
         // --- 1. ASSETS ---
-        // Calculation: Cash Flow based approach
-        
-        // A. Principal Amount (Outstanding Loan Portfolio)
+        // A. Outstanding Principal
         $activeLoans = $manager->loans()
             ->where('status', 'active')
             ->where('start_date', '<=', $reportDate)
@@ -178,46 +176,44 @@ class ReportController extends Controller
         foreach($activeLoans as $loan) {
             $totalDue = $loan->principal_amount + ($loan->principal_amount * ($loan->interest_rate / 100));
             $paid = $loan->payments()->where('payment_date', '<=', $reportDate)->sum('amount_paid');
-            // Pro-rate the balance to estimate principal portion (Simplified: Gross Portfolio)
-            // Or simply use Total Receivable as Asset
             $outstandingPrincipal += max(0, $totalDue - $paid);
         }
 
         // B. Cash Logic
-        // Inflows
         $loansPaid = $manager->payments()->where('payment_date', '<=', $reportDate)->sum('amount_paid');
         $otherInflows = $manager->cashTransactions()->where('type', 'inflow')->where('transaction_date', '<=', $reportDate)->sum('amount');
         $bankWithdrawals = $manager->bankTransactions()->where('type', 'Withdrawal')->where('deposit_date', '<=', $reportDate)->sum('amount');
         
-        // Outflows
         $loansGiven = $manager->loans()->where('start_date', '<=', $reportDate)->sum('principal_amount');
         $expensesPaid = $manager->expenses()->where('expense_date', '<=', $reportDate)->sum('amount');
         $otherOutflows = $manager->cashTransactions()->where('type', 'outflow')->where('transaction_date', '<=', $reportDate)->sum('amount');
         $bankDeposits = $manager->bankTransactions()->where('type', 'Deposit')->where('deposit_date', '<=', $reportDate)->sum('amount');
 
         // Balances
-        $cashOnHand = ($loansPaid + $otherInflows + $bankWithdrawals) - ($loansGiven + $expensesPaid + $otherOutflows + $bankDeposits);
+        $openingBalance = $manager->opening_balance ?? 0;
+        
+        // Cash at hand = Opening + In - Out
+        $cashOnHand = $openingBalance + ($loansPaid + $otherInflows + $bankWithdrawals) - ($loansGiven + $expensesPaid + $otherOutflows + $bankDeposits);
+        
         $cashAtBank = $bankDeposits - $bankWithdrawals;
 
-        // Construct Assets Collection as requested
         $assets = collect([
             (object)['name' => 'Principal Amount (Loan Portfolio)', 'balance' => $outstandingPrincipal],
             (object)['name' => 'Cash At Hand', 'balance' => $cashOnHand],
             (object)['name' => 'Cash at Bank', 'balance' => $cashAtBank],
-            (object)['name' => 'Receivables', 'balance' => 0], // Add logic if you track non-loan receivables separately
+            (object)['name' => 'Receivables', 'balance' => 0],
         ]);
         $totalAssets = $assets->sum('balance');
 
 
         // --- 2. LIABILITIES ---
-        // FIX: Extract Savings from Inflows by searching description instead of non-existent category column
         $savings = $manager->cashTransactions()
             ->where('type', 'inflow')
-            ->where('description', 'like', '%Savings%') // Fixed: Fallback to description
+            ->where('description', 'like', '%Savings%')
             ->where('transaction_date', '<=', $reportDate)
             ->sum('amount');
             
-        $payables = 0; // Placeholder
+        $payables = 0;
 
         $liabilities = collect([
             (object)['name' => 'Savings', 'balance' => $savings],
@@ -227,7 +223,7 @@ class ReportController extends Controller
 
 
         // --- 3. EQUITY ---
-        $capital = 10000000; // Static Startup Capital
+        $capital = $openingBalance; 
         $shares = 0;
         
         // Retained Earnings derived from P&L
@@ -236,7 +232,7 @@ class ReportController extends Controller
         $retainedEarnings = $plData['netProfit'];
 
         $equity = collect([
-            (object)['name' => 'Startup Capital', 'balance' => $capital],
+            (object)['name' => 'Opening Balance (Capital)', 'balance' => $capital],
             (object)['name' => 'Shares', 'balance' => $shares],
             (object)['name' => 'Retained Earnings', 'balance' => $retainedEarnings],
         ]);
@@ -289,7 +285,7 @@ class ReportController extends Controller
             ]);
         }
 
-        // 3. Cash Transactions (Inflows/Outflows)
+        // 3. Cash Transactions
         $txs = $manager->cashTransactions()->whereBetween('transaction_date', [$startDate, $endDate])->get();
         foreach ($txs as $tx) {
             $masterTransactionList->push((object)[
@@ -317,27 +313,28 @@ class ReportController extends Controller
     }
 
 
-    // === TRIAL BALANCE (DYNAMIC FIX) ===
+    // === TRIAL BALANCE (FIXED) ===
     public function trialBalance(Request $request)
     {
         $manager = auth()->user()->loanManager;
+        $manager->refresh(); // Refresh to get latest opening balance
+        
         $endDate = $request->input('end_date', now()->toDateString());
 
-        // This method derives the Trial Balance from Operational Data
-        // So it starts blank (0) if no transactions exist.
-
         // 1. DEBITS (Assets + Expenses)
-        // Cash
-        $plReq = new Request(['end_date' => $endDate]);
-        $bsData = $this->balanceSheet($plReq); // Reuse BS calculation
+        // Note: Balance Sheet expects 'report_date'
+        $bsReq = new Request(['report_date' => $endDate]); 
+        $bsData = $this->balanceSheet($bsReq); 
         
         $assets = $bsData['assets'] ?? collect([]);
-        $expenses = $this->getProfitAndLossData($plReq)['expenseAccounts'];
+        
+        // Re-request P&L for expense data
+        $plReqDate = new Request(['end_date' => $endDate]);
+        $expenses = $this->getProfitAndLossData($plReqDate)['expenseAccounts'];
 
         // 2. CREDITS (Liabilities + Equity + Income)
         $liabilities = $bsData['liabilities'] ?? collect([]);
-        $equity = $bsData['equity'] ?? collect([]);
-        $income = $this->getProfitAndLossData($plReq)['incomeAccounts'];
+        $income = $this->getProfitAndLossData($plReqDate)['incomeAccounts'];
 
         // Construct Account List
         $accounts = collect([]);
@@ -361,9 +358,12 @@ class ReportController extends Controller
                 $accounts->push((object)['name' => $liab->name, 'debit' => 0, 'credit' => $liab->balance]);
             }
         }
-        // Add Equity (Cr) - Exclude Retained Earnings logic for TB to balance strictly on Revenue/Expense
-        // We add Capital directly.
-        $accounts->push((object)['name' => 'Startup Capital', 'debit' => 0, 'credit' => 10000000]); // Matches BS hardcode
+        
+        // Add Equity (Cr) - FIX: Use Manager Opening Balance explicitly
+        $openingBalance = $manager->opening_balance ?? 0;
+        if($openingBalance > 0) {
+            $accounts->push((object)['name' => 'Opening Balance (Equity)', 'debit' => 0, 'credit' => $openingBalance]);
+        }
 
         // Add Income (Cr)
         foreach($income as $inc) {

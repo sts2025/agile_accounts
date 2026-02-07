@@ -3,31 +3,31 @@
 namespace App\Http\Controllers\LoanManager;
 
 use App\Http\Controllers\Controller;
+use App\Models\BankTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
-use App\Models\BankTransaction; 
 
 class BankTransactionController extends Controller
 {
     /**
-     * Display a listing of the bank transactions for the manager.
-     * This is the function for your report page.
+     * Display a listing of the bank transactions.
      */
     public function index(Request $request)
     {
-        $manager = Auth::user()->loanManager;
-        $query = $manager->bankTransactions(); 
+        // FIX: Must use Loan Manager Profile ID, NOT User ID
+        $managerId = Auth::user()->loanManager->id;
+
+        $query = BankTransaction::where('loan_manager_id', $managerId);
 
         $startDate = $request->input('start_date', Carbon::now()->startOfMonth()->toDateString());
         $endDate = $request->input('end_date', Carbon::now()->endOfMonth()->toDateString());
 
         if ($startDate && $endDate) {
-            // *** THE FIX: Filter by 'deposit_date' not 'transaction_date' ***
             $query->whereBetween('deposit_date', [$startDate, $endDate]);
         }
 
-        $transactions = $query->latest()->get();
+        $transactions = $query->latest('deposit_date')->paginate(15);
 
         return view('loan-manager.transactions.bank-transactions.index', [
             'transactions' => $transactions,
@@ -37,31 +37,30 @@ class BankTransactionController extends Controller
     }
 
     /**
-     * Store a newly created bank transaction in storage.
-     * This is the function for your "Add Banking" modal.
+     * Store a newly created bank transaction.
      */
     public function store(Request $request)
     {
+        // FIX: Must use Loan Manager Profile ID
+        $managerId = Auth::user()->loanManager->id;
+
         $validated = $request->validate([
-            'type' => 'required|string|in:Deposit,Withdrawal',
+            'type' => 'required|string|in:Deposit,Withdrawal', // Matches Dashboard Logic
             'amount' => 'required|numeric|min:1',
             'description' => 'required|string|max:255',
             'transaction_date' => 'required|date',
         ]);
 
-        $manager = Auth::user()->loanManager;
-
-        // *** THE FIX: We must manually map the form fields to the
-        //     database columns because the names are different.
-        $manager->bankTransactions()->create([
+        BankTransaction::create([
+            'loan_manager_id' => $managerId, // CRITICAL: Links to Dashboard Profile
             'type' => $validated['type'],
             'amount' => $validated['amount'],
             'description' => $validated['description'],
-            'deposit_date' => $validated['transaction_date'], // Map form 'transaction_date' to DB 'deposit_date'
-            // 'loan_manager_id' is added automatically by the relationship
+            'deposit_date' => $validated['transaction_date'],
+            'bank_name' => 'N/A', // Default if form doesn't have it
         ]);
 
-        // Redirect back to the report page to show the new transaction
-        return redirect()->route('bank-transactions.index')->with('success', 'Bank transaction recorded.');
+        return redirect()->route('bank-transactions.index')
+            ->with('success', 'Bank transaction recorded successfully.');
     }
 }

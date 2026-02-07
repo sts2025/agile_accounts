@@ -1,251 +1,368 @@
-<?php
-// Note: This file assumes $loan is passed from the LoanController::show() method.
-$currency = optional(optional($loan)->manager)->currency_symbol ?? \App\Models\LoanManager::getCurrency();
-?>
 
 
 <?php $__env->startSection('title', 'Loan Details'); ?>
 
 <?php $__env->startSection('content'); ?>
-    <?php if($loan): ?>
-        <?php
-            // --- CRITICAL LOGIC FIXES ---
-            $totalPaid = $loan->payments->sum('amount_paid'); 
-            
-            // Interest is typically stored as 'interest_amount' on the loan model after creation
-            $interestAmount = $loan->interest_amount ?? ($loan->principal_amount * ($loan->interest_rate / 100));
-            
-            // FIX 1a: Total Repayable (Principal + Interest ONLY)
-            $totalRepayable = $loan->principal_amount + $interestAmount;
-            
-            // FIX 1b: Remaining Balance (Total Repayable - Total Paid)
-            $remainingBalance = $totalRepayable - $totalPaid;
-            
-            // FIX 2: Payment Guardrail Check
-            $canRecordPayment = ($loan->status === 'active' || $loan->status === 'defaulted') && ($remainingBalance > 0);
-            
-            $badgeColor = 'bg-secondary';
-            switch ($loan->status) {
-                case 'active': $badgeColor = 'bg-primary'; break;
-                case 'paid': $badgeColor = 'bg-success'; break;
-                case 'defaulted': $badgeColor = 'bg-danger'; break;
-            }
-        ?>
+<div class="container-fluid">
 
-        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
-            <h1 class="h3 mb-2 mb-md-0 text-gray-800">Loan Details</h1>
-            
-            <div class="btn-group" role="group" aria-label="Loan Actions">
-                
-                
-                <a href="<?php echo e(route('reports.print-forms', ['loan_id' => $loan->id])); ?>" class="btn btn-info">
-                    <i class="fas fa-print me-1"></i> Print Forms
-                </a>
-                
-                
-                <?php if($canRecordPayment): ?>
-                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#recordPaymentModal">
-                        <i class="fas fa-dollar-sign me-1"></i> Record Payment
-                    </button>
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-dark">
+                Loan #<?php echo e($loan->reference_id ?? str_pad($loan->id, 4, '0', STR_PAD_LEFT)); ?>
+
+                <?php if($loan->status == 'paid'): ?>
+                    <span class="badge bg-success" style="font-size: 0.5em; vertical-align: middle;">PAID</span>
+                <?php elseif($loan->status == 'defaulted'): ?>
+                    <span class="badge bg-danger" style="font-size: 0.5em; vertical-align: middle;">DEFAULTED</span>
                 <?php else: ?>
-                    <button type="button" class="btn btn-secondary" disabled>
-                        <i class="fas fa-check-circle me-1"></i> Loan Paid/Inactive
-                    </button>
+                    <span class="badge bg-primary" style="font-size: 0.5em; vertical-align: middle;">ACTIVE</span>
                 <?php endif; ?>
-            </div>
-        </div>
-        
-        <a href="<?php echo e(route('loans.index')); ?>" class="btn btn-secondary btn-sm mb-3">
-            <i class="fas fa-arrow-left me-1"></i> Back to Loan List
-        </a>
+            </h1>
+            <p class="mb-0 text-muted">
+                Client: <strong><?php echo e($loan->client->name); ?></strong> | Phone: <?php echo e($loan->client->phone_number); ?>
 
-        <?php if(session('status')): ?>
-            <div class="alert alert-success"><?php echo e(session('status')); ?></div>
-        <?php endif; ?>
-        <hr>
+            </p>
+        </div>
+        <div>
+            <a href="<?php echo e(route('loans.index')); ?>" class="btn btn-secondary shadow-sm">
+                <i class="fas fa-arrow-left"></i> Back
+            </a>
+            
+            <a href="<?php echo e(route('loans.downloadAgreement', $loan->id)); ?>" class="btn btn-dark shadow-sm ms-2" target="_blank">
+                <i class="fas fa-file-pdf"></i> Agreement
+            </a>
+        </div>
+    </div>
 
-        
-        <div class="card mb-4 shadow">
-            <div class="card-header py-3">
-                <h6 class="m-0 font-weight-bold text-primary">Loan Summary</h6>
-            </div>
-            <div class="card-body">
-                <p><strong>Client:</strong> <?php echo e($loan->client->name ?? 'Client Not Found'); ?></p>
-                <p><strong>Principal Amount:</strong> <?php echo e($currency); ?> <?php echo e(number_format($loan->principal_amount, 0)); ?></p>
-                
-                <p><strong>Interest Rate:</strong> <?php echo e($loan->interest_rate ?? 'N/A'); ?>% (<?php echo e(ucfirst($loan->interest_period ?? '')); ?>)</p>
-                
-                <p><strong>Interest Amount:</strong> <?php echo e($currency); ?> <?php echo e(number_format($interestAmount, 0)); ?></p>
+    <?php if(session('status')): ?>
+        <div class="alert alert-success alert-dismissible fade show">
+            <?php echo e(session('status')); ?>
 
-                <p><strong>Processing Fee:</strong> <?php echo e($currency); ?> <?php echo e(number_format($loan->processing_fee, 0)); ?></p>
-                
-                <p><strong>Total Repayable (P+I):</strong> <?php echo e($currency); ?> <?php echo e(number_format($totalRepayable, 0)); ?></p>
-
-                <p><strong>Date Given:</strong> <?php echo e($loan->disbursement_date ? \Carbon\Carbon::parse($loan->disbursement_date)->format('M d, Y') : 'N/A'); ?></p>
-                <hr>
-                <p><strong>Total Paid:</strong> <span class="text-success"><?php echo e($currency); ?> <?php echo e(number_format($totalPaid, 0)); ?></span></p>
-                <p><strong>Remaining Balance:</strong> <span class="text-danger"><?php echo e($currency); ?> <?php echo e(number_format(max(0, $remainingBalance), 0)); ?></span></p>
-                <p><strong>Status:</strong> <span class="badge <?php echo e($badgeColor); ?>"><?php echo e(ucfirst($loan->status)); ?></span></p>
-            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
-
-        
-        <div class="card mb-4 shadow">
-            <div class="card-header py-3">
-                <h6 class="m-0 font-weight-bold text-primary">Collateral</h6>
-            </div>
-            <div class="card-body">
-                <table class="table table-sm table-striped">
-                    
-                    <thead><tr><th>Type</th><th>Description</th><th>Valuation (<?php echo e($currency); ?>)</th><th>Status</th><th>Notes</th></tr></thead>
-                    <tbody>
-                        <?php if($loan->collateral): ?>
-                            <tr>
-                                <td><?php echo e($loan->collateral->collateral_type ?? 'N/A'); ?></td>
-                                <td><?php echo e($loan->collateral->description ?? 'N/A'); ?></td>
-                                <td><?php echo e(number_format($loan->collateral->valuation_amount ?? 0, 0)); ?></td>
-                                <td><?php if($loan->collateral->is_released ?? false): ?><span class="badge bg-success">Released</span><?php else: ?><span class="badge bg-info">Held</span><?php endif; ?></td>
-                                <td><?php echo e($loan->collateral->notes ?? 'N/A'); ?></td>
-                            </tr>
-                        <?php else: ?>
-                            <tr><td colspan="5" class="text-center">No collateral was provided for this loan.</td></tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        
-        
-        <div class="card mb-4 shadow">
-            <div class="card-header py-3">
-                <h6 class="m-0 font-weight-bold text-primary">Guarantor(s)</h6>
-            </div>
-            <div class="card-body">
-                <table class="table table-sm table-striped">
-                    <thead><tr><th>Name</th><th>Phone</th><th>Address</th><th>Occupation</th><th>Relationship</th></tr></thead>
-                    <tbody>
-                        <?php if($loan->guarantor): ?>
-                            <tr>
-                                <td><?php echo e($loan->guarantor->name ?? 'N/A'); ?></td>
-                                <td><?php echo e($loan->guarantor->phone ?? 'N/A'); ?></td>
-                                <td><?php echo e($loan->guarantor->address ?? 'N/A'); ?></td>
-                                <td><?php echo e($loan->guarantor->occupation ?? 'N/A'); ?></td>
-                                <td><?php echo e($loan->guarantor->relationship_to_client ?? 'N/A'); ?></td>
-                            </tr>
-                        <?php else: ?>
-                            <tr><td colspan="5" class="text-center">No guarantor was provided for this loan.</td></tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        
-        
-        <div class="card mb-4 shadow">
-            <div class="card-header py-3">
-                <h6 class="m-0 font-weight-bold text-primary">Payment History</h6>
-            </div>
-            <div class="card-body">
-                <table class="table table-sm table-striped">
-                    <thead><tr><th>Date</th><th>Amount (<?php echo e($currency); ?>)</th><th>Method</th><th>Receipt #</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        <?php $__empty_1 = true; $__currentLoopData = $loan->payments; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $payment): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
-                            <tr>
-                                <td><?php echo e($payment->payment_date ? \Carbon\Carbon::parse($payment->payment_date)->format('M d, Y') : 'N/A'); ?></td>
-                                <td><?php echo e(number_format($payment->amount_paid ?? 0, 0)); ?></td>
-                                <td><?php echo e($payment->payment_method ?? 'N/A'); ?></td>
-                                <td><?php echo e($payment->receipt_number ?? 'N/A'); ?></td>
-                                <td>
-                                    <a href="<?php echo e(route('payments.receipt', $payment->id)); ?>" class="btn btn-secondary btn-sm" target="_blank">Receipt</a>
-                                </td>
-                            </tr>
-                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
-                            <tr><td colspan="5" class="text-center">No payments have been recorded for this loan yet.</td></tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        
-        
-        <div class="card shadow">
-            <div class="card-header py-3">
-                <h6 class="m-0 font-weight-bold text-primary">Repayment Schedule</h6>
-            </div>
-            <div class="card-body">
-                <table class="table table-striped">
-                    <thead><tr><th>#</th><th>Due Date</th><th>Payment Amount (<?php echo e($currency); ?>)</th><th>Principal (<?php echo e($currency); ?>)</th><th>Interest (<?php echo e($currency); ?>)</th><th>Balance (<?php echo e($currency); ?>)</th></tr></thead>
-                    <tbody>
-                        <?php if(!empty($loan->schedule)): ?>
-                            <?php $__currentLoopData = $loan->schedule; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $payment_schedule): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-                                <tr>
-                                    <td><?php echo e($payment_schedule['period'] ?? ''); ?></td>
-                                    <td><?php echo e(isset($payment_schedule['due_date']) ? \Carbon\Carbon::parse($payment_schedule['due_date'])->format('F d, Y') : ''); ?></td>
-                                    <td><?php echo e(number_format($payment_schedule['payment_amount'] ?? 0, 0)); ?></td>
-                                    <td><?php echo e(number_format($payment_schedule['principal'] ?? 0, 0)); ?></td>
-                                    <td><?php echo e(number_format($payment_schedule['interest'] ?? 0, 0)); ?></td>
-                                    <td><?php echo e(number_format($payment_schedule['balance'] ?? 0, 0)); ?></td>
-                                </tr>
-                            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
-                        <?php else: ?>
-                            <tr><td colspan="6" class="text-center">Repayment schedule could not be calculated or is missing.</td></tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    <?php else: ?>
-        <div class="alert alert-danger">Loan not found.</div>
     <?php endif; ?>
-<?php $__env->stopSection(); ?>
 
-<?php $__env->startPush('modals'); ?>
-    <?php if($loan): ?>
+    <div class="row">
         
-        <div class="modal fade" id="recordPaymentModal" tabindex="-1" aria-labelledby="paymentModalLabel" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="paymentModalLabel">Record Payment for Loan #<?php echo e($loan->id); ?></h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        
+        <div class="col-lg-4 mb-4">
+            
+            
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-transparent border-bottom">
+                    <h6 class="m-0 font-weight-bold text-primary">Client Profile</h6>
+                </div>
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="fas fa-user-circle fa-4x text-secondary"></i>
                     </div>
-                    <form method="POST" action="<?php echo e(route('payments.store')); ?>">
-                        <?php echo csrf_field(); ?>
-                        <div class="modal-body">
-                            <input type="hidden" name="loan_id" value="<?php echo e($loan->id); ?>">
-                            <div class="mb-3">
-                                <label class="form-label">Client Name</label>
-                                <input type="text" class="form-control" value="<?php echo e($loan->client->name ?? 'N/A'); ?>" readonly>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Amount Paid (<?php echo e($currency); ?>)</label>
-                                <input type="number" step="100" class="form-control" name="amount_paid" required max="<?php echo e(max(0, $remainingBalance)); ?>">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Payment Date</label>
-                                <input type="date" class="form-control" name="payment_date" value="<?php echo e(now()->toDateString()); ?>" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Payment Method</label>
-                                <select name="payment_method" class="form-select">
-                                    <option value="Cash">Cash</option>
-                                    <option value="Bank Transfer">Bank Transfer</option>
-                                    <option value="Mobile Money">Mobile Money</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Notes (Optional)</label>
-                                <textarea class="form-control" name="notes" rows="3"></textarea>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                            <button type="submit" class="btn btn-primary">Save Payment</button>
-                        </div>
-                    </form>
+                    <h5 class="font-weight-bold"><?php echo e($loan->client->name); ?></h5>
+                    <p class="text-muted mb-2"><?php echo e($loan->client->business_occupation ?? 'Occupation N/A'); ?></p>
+                    <p class="small text-muted mb-0"><i class="fas fa-map-marker-alt me-1"></i> <?php echo e($loan->client->address); ?></p>
+                    <hr>
+                    <a href="<?php echo e(route('clients.edit', $loan->client->id)); ?>" class="btn btn-sm btn-outline-primary w-100">View Full Profile</a>
+                </div>
+            </div>
+
+            
+            <div class="card shadow-sm mb-4 border-start border-primary border-4">
+                <div class="card-header bg-transparent border-bottom">
+                    <h6 class="m-0 font-weight-bold text-primary">Financial Summary</h6>
+                </div>
+                <div class="card-body">
+                    <?php
+                        $manager = Auth::user()->loanManager;
+                        $currency = $manager->currency_symbol ?? 'UGX';
+                        
+                        $principal = $loan->principal_amount;
+                        // Calculate interest based on rate
+                        $calculatedInterest = $principal * ($loan->interest_rate / 100);
+                        // Use stored interest_amount if available, otherwise calculated
+                        $interest = $loan->interest_amount ?? $calculatedInterest;
+                        
+                        $totalDue = $principal + $interest;
+                        $totalPaid = $loan->payments->sum('amount_paid');
+                        $balance = max(0, $totalDue - $totalPaid);
+                        
+                        $progress = ($totalDue > 0) ? ($totalPaid / $totalDue) * 100 : 0;
+                    ?>
+
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="small text-uppercase text-muted fw-bold">Principal</span>
+                        <span class="fw-bold"><?php echo e(number_format($principal)); ?> <?php echo e($currency); ?></span>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="small text-uppercase text-muted fw-bold">Interest (<?php echo e($loan->interest_rate); ?>%)</span>
+                        <span class="fw-bold"><?php echo e(number_format($interest)); ?> <?php echo e($currency); ?></span>
+                    </div>
+                    
+                    <hr class="my-2">
+
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="small text-uppercase text-dark fw-bold">Total Due</span>
+                        <span class="fw-bold text-dark"><?php echo e(number_format($totalDue)); ?> <?php echo e($currency); ?></span>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="small text-uppercase text-success fw-bold">Paid</span>
+                        <span class="fw-bold text-success"><?php echo e(number_format($totalPaid)); ?> <?php echo e($currency); ?></span>
+                    </div>
+
+                    <div class="progress mb-3" style="height: 10px;">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: <?php echo e($progress); ?>%"></div>
+                    </div>
+
+                    <div class="p-3 bg-light rounded border border-danger">
+                        <div class="small text-danger text-uppercase fw-bold mb-1">Balance Due</div>
+                        <div class="h4 mb-0 font-weight-bold text-danger"><?php echo e(number_format($balance)); ?> <?php echo e($currency); ?></div>
+                    </div>
                 </div>
             </div>
         </div>
-    <?php endif; ?>
-<?php $__env->stopPush(); ?>
+
+        
+        <div class="col-lg-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header border-bottom-0">
+                    
+                    <ul class="nav nav-tabs card-header-tabs" id="loanTabs" role="tablist">
+                        <li class="nav-item">
+                            <a class="nav-link active" id="schedule-tab" data-bs-toggle="tab" data-bs-target="#schedule" type="button" role="tab">
+                                <i class="fas fa-calendar-alt me-2"></i> Schedule
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" id="payments-tab" data-bs-toggle="tab" data-bs-target="#payments" type="button" role="tab">
+                                <i class="fas fa-history me-2"></i> History
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" id="guarantors-tab" data-bs-toggle="tab" data-bs-target="#guarantors" type="button" role="tab">
+                                <i class="fas fa-users me-2"></i> Guarantors
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" id="collateral-tab" data-bs-toggle="tab" data-bs-target="#collateral" type="button" role="tab">
+                                <i class="fas fa-car me-2"></i> Collateral
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body">
+                    <div class="tab-content" id="loanTabsContent">
+                        
+                        
+                        <div class="tab-pane fade show active" id="schedule" role="tabpanel">
+                            <h6 class="font-weight-bold text-primary mb-3">Repayment Schedule</h6>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm table-striped">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Due Date</th>
+                                            <th class="text-end">Installment</th>
+                                            <th class="text-end">Balance</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php if(isset($schedule) && count($schedule) > 0): ?>
+                                            <?php $__currentLoopData = $schedule; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                                            <tr>
+                                                <td><?php echo e($row['period']); ?></td>
+                                                <td><?php echo e(\Carbon\Carbon::parse($row['due_date'])->format('d M, Y')); ?></td>
+                                                <td class="text-end fw-bold"><?php echo e(number_format($row['payment_amount'])); ?></td>
+                                                <td class="text-end"><?php echo e(number_format(max(0, $row['balance']))); ?></td>
+                                            </tr>
+                                            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                                        <?php else: ?>
+                                            <tr>
+                                                <td colspan="4" class="text-center text-muted py-3">
+                                                    Schedule calculation data unavailable.
+                                                </td>
+                                            </tr>
+                                        <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        
+                        <div class="tab-pane fade" id="payments" role="tabpanel">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="font-weight-bold text-success m-0">Payment History</h6>
+                                
+                                <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addPaymentModal">
+                                    <i class="fas fa-plus"></i> Add Payment
+                                </button>
+                            </div>
+                            
+                            <?php if($loan->payments->count() > 0): ?>
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-hover">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Date</th>
+                                                <th>Receipt #</th>
+                                                <th>Amount</th>
+                                                <th>Method</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php $__currentLoopData = $loan->payments->sortByDesc('payment_date'); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $payment): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                                            <tr>
+                                                <td><?php echo e(\Carbon\Carbon::parse($payment->payment_date)->format('d M, Y')); ?></td>
+                                                <td><?php echo e($payment->reference_id ?? $payment->receipt_number ?? '-'); ?></td>
+                                                <td class="text-success fw-bold"><?php echo e(number_format($payment->amount_paid)); ?></td>
+                                                <td><?php echo e(ucfirst($payment->payment_method)); ?></td>
+                                                <td>
+                                                    <a href="<?php echo e(route('payments.receipt', $payment->id)); ?>" class="btn btn-sm btn-info text-white" target="_blank" title="Print Receipt">
+                                                        <i class="fas fa-print"></i>
+                                                    </a>
+                                                    
+                                                    <a href="<?php echo e(route('payments.edit', $payment->id)); ?>" class="btn btn-sm btn-primary" title="Edit">
+                                                        <i class="fas fa-edit"></i>
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            <?php else: ?>
+                                <div class="text-center py-5 bg-light rounded">
+                                    <i class="fas fa-receipt fa-3x text-secondary mb-3"></i>
+                                    <p class="text-muted">No payments recorded yet.</p>
+                                    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addPaymentModal">Record First Payment</button>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        
+                        <div class="tab-pane fade" id="guarantors" role="tabpanel">
+                            <?php if($loan->guarantor_name || ($loan->guarantors && $loan->guarantors->count() > 0)): ?>
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Phone</th>
+                                                <th>Relationship</th>
+                                                <th>Address</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php if($loan->guarantors && $loan->guarantors->count() > 0): ?>
+                                                <?php $__currentLoopData = $loan->guarantors; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $g): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                                                <tr>
+                                                    <td class="fw-bold"><?php echo e($g->first_name); ?> <?php echo e($g->last_name); ?></td>
+                                                    <td><?php echo e($g->phone_number); ?></td>
+                                                    <td><?php echo e($g->relationship_to_borrower); ?></td>
+                                                    <td><?php echo e($g->address); ?></td>
+                                                </tr>
+                                                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                                            <?php elseif($loan->guarantor_name): ?>
+                                                
+                                                <tr>
+                                                    <td class="fw-bold"><?php echo e($loan->guarantor_name); ?></td>
+                                                    <td><?php echo e($loan->guarantor_phone); ?></td>
+                                                    <td><?php echo e($loan->guarantor_relationship); ?></td>
+                                                    <td><?php echo e($loan->guarantor_address); ?></td>
+                                                </tr>
+                                            <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            <?php else: ?>
+                                <div class="text-center py-4 text-muted">No guarantor details recorded.</div>
+                            <?php endif; ?>
+                        </div>
+
+                        
+                        <div class="tab-pane fade" id="collateral" role="tabpanel">
+                            <?php if($loan->collateral_name || ($loan->collaterals && $loan->collaterals->count() > 0)): ?>
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Item Name</th>
+                                                <th>Value</th>
+                                                <th>Description/Condition</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php if($loan->collaterals && $loan->collaterals->count() > 0): ?>
+                                                <?php $__currentLoopData = $loan->collaterals; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $c): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                                                <tr>
+                                                    <td class="fw-bold"><?php echo e($c->name); ?> <?php echo e($c->collateral_type); ?></td>
+                                                    <td><?php echo e(number_format($c->valuation_amount ?? $c->value)); ?></td>
+                                                    <td><?php echo e($c->description); ?> (<?php echo e($c->condition); ?>)</td>
+                                                </tr>
+                                                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                                            <?php elseif($loan->collateral_name): ?>
+                                                <tr>
+                                                    <td class="fw-bold"><?php echo e($loan->collateral_name); ?></td>
+                                                    <td><?php echo e(number_format((float)$loan->collateral_value)); ?></td>
+                                                    <td><?php echo e($loan->collateral_description); ?></td>
+                                                </tr>
+                                            <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            <?php else: ?>
+                                <div class="text-center py-4 text-muted">No collateral recorded.</div>
+                            <?php endif; ?>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal fade" id="addPaymentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="<?php echo e(route('payments.store')); ?>" method="POST">
+                <?php echo csrf_field(); ?>
+                <input type="hidden" name="loan_id" value="<?php echo e($loan->id); ?>">
+                
+                <div class="modal-header">
+                    <h5 class="modal-title">Record New Payment</h5>
+                    
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Amount (<?php echo e($currency); ?>)</label>
+                        <input type="number" name="amount_paid" class="form-control" required min="1">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Payment Date</label>
+                        <input type="date" name="payment_date" class="form-control" value="<?php echo e(date('Y-m-d')); ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Method</label>
+                        <select name="payment_method" class="form-select">
+                            <option value="Cash" selected>Cash</option>
+                            <option value="Bank">Bank Transfer</option>
+                            <option value="Mobile Money">Mobile Money</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Save Payment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<?php $__env->stopSection(); ?>
 <?php echo $__env->make('layouts.manager', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH C:\xampp\htdocs\agile_accounts\agile_accounts\resources\views/loan-manager/loans/show.blade.php ENDPATH**/ ?>

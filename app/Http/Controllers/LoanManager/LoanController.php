@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\LoanManager;
 
-// FIX: Extend the Framework Controller directly to ensure middleware() works
 use Illuminate\Routing\Controller; 
 use App\Models\Loan;
 use App\Models\Client;
@@ -31,8 +30,8 @@ class LoanController extends Controller
     {
         $loanManager = Auth::user()->loanManager;
         
-        // Start the query relative to the logged-in manager
-        $query = $loanManager->loans()->with('client');
+        // FIX 1: Eager load 'payments' so we can calculate balance in the view
+        $query = $loanManager->loans()->with(['client', 'payments']);
 
         // --- 1. Search Logic ---
         if ($search = $request->input('search')) {
@@ -46,20 +45,23 @@ class LoanController extends Controller
         if ($filter = $request->input('filter')) {
             if ($filter === 'completed') {
                 $query->where('status', 'paid');
+            } elseif ($filter === 'active') {
+                $query->where('status', 'active');
+            } elseif ($filter === 'defaulted') {
+                $query->where('status', 'defaulted');
             }
         }
         
         $currency_symbol = $loanManager->currency_symbol ?? 'UGX'; 
 
-        $loans = $query->latest()->get(); 
+        // FIX 2: Use paginate instead of get() for better performance with lists
+        $loans = $query->latest()->paginate(10); 
         
         return view('loan-manager.loans.index', compact('loans', 'currency_symbol'));
     }
 
     public function create()
     {
-        // FIX IS HERE: Added orderBy('created_at', 'desc')
-        // This sorts the dropdown so the client you just added is at the very top.
         $clients = Auth::user()->loanManager->clients()
                         ->orderBy('created_at', 'desc')
                         ->get();
@@ -78,7 +80,7 @@ class LoanController extends Controller
             'interest_rate' => 'required|numeric|min:0|max:100', 
             'term' => 'required|integer|min:1', 
             'repayment_frequency' => 'required|string|in:Daily,Weekly,Monthly',
-            'start_date' => 'required|date|after_or_equal:today', 
+            'start_date' => 'required|date', 
 
             // Guarantor Checks
             'guarantor_first_name' => 'nullable|string|max:255',
@@ -105,6 +107,8 @@ class LoanController extends Controller
                 'repayment_frequency' => $validatedData['repayment_frequency'],
                 'start_date' => $validatedData['start_date'],
                 'status' => 'active',
+                // Auto-generate Reference ID
+                'reference_id' => 'LN-' . str_pad(Loan::where('loan_manager_id', $loanManagerId)->count() + 1, 4, '0', STR_PAD_LEFT),
             ]);
 
             if ($request->filled('guarantor_first_name')) {
