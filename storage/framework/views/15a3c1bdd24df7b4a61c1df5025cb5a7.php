@@ -36,8 +36,29 @@
     </div>
 
     <?php if(session('status')): ?>
-        <div class="alert alert-success alert-dismissible fade show">
-            <?php echo e(session('status')); ?>
+        <div class="alert alert-success alert-dismissible fade show shadow-sm">
+            <i class="fas fa-check-circle me-2"></i> <?php echo e(session('status')); ?>
+
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
+
+    
+    <?php if($errors->any()): ?>
+        <div class="alert alert-danger alert-dismissible fade show shadow-sm border-start border-danger border-4">
+            <strong><i class="fas fa-exclamation-circle me-2"></i> Payment Failed to Save!</strong>
+            <ul class="mb-0 mt-2">
+                <?php $__currentLoopData = $errors->all(); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $error): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                    <li><?php echo e($error); ?></li>
+                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+            </ul>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
+
+    <?php if(session('error')): ?>
+        <div class="alert alert-danger alert-dismissible fade show shadow-sm">
+            <i class="fas fa-exclamation-triangle me-2"></i> <?php echo e(session('error')); ?>
 
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
@@ -193,14 +214,14 @@
                             <div class="d-flex justify-content-between align-items-center mb-3">
                                 <h6 class="font-weight-bold text-success m-0">Payment History</h6>
                                 
-                                <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addPaymentModal">
-                                    <i class="fas fa-plus"></i> Add Payment
+                                <button class="btn btn-sm btn-success fw-bold" data-bs-toggle="modal" data-bs-target="#addPaymentModal">
+                                    <i class="fas fa-plus me-1"></i> Record Payment
                                 </button>
                             </div>
                             
                             <?php if($loan->payments->count() > 0): ?>
                                 <div class="table-responsive">
-                                    <table class="table table-bordered table-hover">
+                                    <table class="table table-bordered table-hover align-middle">
                                         <thead class="table-light">
                                             <tr>
                                                 <th>Date</th>
@@ -214,9 +235,9 @@
                                             <?php $__currentLoopData = $loan->payments->sortByDesc('payment_date'); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $payment): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                                             <tr>
                                                 <td><?php echo e(\Carbon\Carbon::parse($payment->payment_date)->format('d M, Y')); ?></td>
-                                                <td><?php echo e($payment->reference_id ?? $payment->receipt_number ?? '-'); ?></td>
+                                                <td class="text-muted small"><?php echo e($payment->reference_id ?? $payment->receipt_number ?? '-'); ?></td>
                                                 <td class="text-success fw-bold"><?php echo e(number_format($payment->amount_paid)); ?></td>
-                                                <td><?php echo e(ucfirst($payment->payment_method)); ?></td>
+                                                <td><span class="badge bg-secondary"><?php echo e(ucfirst($payment->payment_method)); ?></span></td>
                                                 <td>
                                                     <a href="<?php echo e(route('payments.receipt', $payment->id)); ?>" class="btn btn-sm btn-info text-white" target="_blank" title="Print Receipt">
                                                         <i class="fas fa-print"></i>
@@ -235,7 +256,7 @@
                                 <div class="text-center py-5 bg-light rounded">
                                     <i class="fas fa-receipt fa-3x text-secondary mb-3"></i>
                                     <p class="text-muted">No payments recorded yet.</p>
-                                    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addPaymentModal">Record First Payment</button>
+                                    <button class="btn btn-primary btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#addPaymentModal">Record First Payment</button>
                                 </div>
                             <?php endif; ?>
                         </div>
@@ -326,43 +347,83 @@
 
 <div class="modal fade" id="addPaymentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
-        <div class="modal-content">
+        <div class="modal-content border-0 shadow-lg">
             <form action="<?php echo e(route('payments.store')); ?>" method="POST">
                 <?php echo csrf_field(); ?>
                 <input type="hidden" name="loan_id" value="<?php echo e($loan->id); ?>">
                 
-                <div class="modal-header">
-                    <h5 class="modal-title">Record New Payment</h5>
-                    
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-hand-holding-usd me-2"></i>Record New Payment</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Amount (<?php echo e($currency); ?>)</label>
-                        <input type="number" name="amount_paid" class="form-control" required min="1">
+                <div class="modal-body bg-light">
+                    
+                    <div class="card p-3 border-success bg-white shadow-sm mb-3">
+                        <h6 class="text-success fw-bold mb-3 border-bottom pb-2">Payment Breakdown</h6>
+                        
+                        <div class="row mb-2">
+                            <div class="col-7"><label class="mb-0 fw-bold">Principal Paid:</label></div>
+                            <div class="col-5">
+                                <input type="number" name="principal_paid" id="detailModalPrincipal" class="form-control text-end fw-bold" placeholder="0" min="0" required oninput="calcDetailModalTotal()">
+                            </div>
+                        </div>
+
+                        <div class="row mb-2">
+                            <div class="col-7"><label class="mb-0 fw-bold">Interest Paid:</label></div>
+                            <div class="col-5">
+                                <input type="number" name="interest_paid" id="detailModalInterest" class="form-control text-end fw-bold" placeholder="0" min="0" required oninput="calcDetailModalTotal()">
+                            </div>
+                        </div>
+
+                        <div class="row mt-3 pt-2 border-top">
+                            <div class="col-7"><label class="mb-0 fw-bold text-uppercase">Total Amount:</label></div>
+                            <div class="col-5 text-end"><h5 class="mb-0 fw-bold text-success" id="detailModalTotal">0.00</h5></div>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Payment Date</label>
-                        <input type="date" name="payment_date" class="form-control" value="<?php echo e(date('Y-m-d')); ?>" required>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted">Payment Date</label>
+                            <input type="date" name="payment_date" class="form-control shadow-sm" value="<?php echo e(date('Y-m-d')); ?>" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted">Method</label>
+                            <select name="payment_method" class="form-select shadow-sm">
+                                <option value="Cash" selected>Cash</option>
+                                <option value="Bank Transfer">Bank Transfer</option>
+                                <option value="Mobile Money">Mobile Money</option>
+                            </select>
+                        </div>
                     </div>
+                    
                     <div class="mb-3">
-                        <label class="form-label">Method</label>
-                        <select name="payment_method" class="form-select">
-                            <option value="Cash" selected>Cash</option>
-                            <option value="Bank">Bank Transfer</option>
-                            <option value="Mobile Money">Mobile Money</option>
-                        </select>
+                        <label class="form-label fw-bold small text-muted">Reference / Notes</label>
+                        <input type="text" name="notes" class="form-control shadow-sm" placeholder="Optional details">
                     </div>
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer bg-white border-top-0">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">Save Payment</button>
+                    <button type="submit" class="btn btn-success px-4 fw-bold shadow-sm">Save Payment</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+
+<?php $__env->startPush('scripts'); ?>
+<script>
+    // Live calculation logic for the Split Payment Modal on the Loan Details page
+    function calcDetailModalTotal() {
+        let p = parseFloat(document.getElementById('detailModalPrincipal').value) || 0;
+        let i = parseFloat(document.getElementById('detailModalInterest').value) || 0;
+        let display = document.getElementById('detailModalTotal');
+        if(display) {
+            display.innerText = (p + i).toLocaleString(undefined, {minimumFractionDigits: 2});
+        }
+    }
+</script>
+<?php $__env->stopPush(); ?>
 
 <?php $__env->stopSection(); ?>
 <?php echo $__env->make('layouts.manager', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH C:\xampp\htdocs\agile_accounts\agile_accounts\resources\views/loan-manager/loans/show.blade.php ENDPATH**/ ?>

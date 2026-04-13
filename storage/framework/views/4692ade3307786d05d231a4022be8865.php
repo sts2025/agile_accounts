@@ -4,11 +4,11 @@ $currency = \App\Models\LoanManager::getCurrency() ?? 'UGX';
 // FIX: Safely define $endDate if the controller didn't pass it
 $endDate = $endDate ?? request('end_date', \Carbon\Carbon::today()->toDateString());
 ?>
-@extends('layouts.manager')
 
-@section('title', 'Trial Balance')
 
-@section('content')
+<?php $__env->startSection('title', 'Trial Balance'); ?>
+
+<?php $__env->startSection('content'); ?>
 <div class="container-fluid">
 
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
@@ -20,9 +20,9 @@ $endDate = $endDate ?? request('end_date', \Carbon\Carbon::today()->toDateString
 
     <div class="card shadow mb-4 no-print">
         <div class="card-body">
-            <form method="GET" action="{{ route('reports.trial-balance') }}" class="form-inline">
+            <form method="GET" action="<?php echo e(route('reports.trial-balance')); ?>" class="form-inline">
                 <label class="mr-2 font-weight-bold">As of Date:</label>
-                <input type="date" name="end_date" class="form-control mr-3" value="{{ $endDate }}">
+                <input type="date" name="end_date" class="form-control mr-3" value="<?php echo e($endDate); ?>">
                 <button type="submit" class="btn btn-primary">Generate</button>
             </form>
         </div>
@@ -31,7 +31,8 @@ $endDate = $endDate ?? request('end_date', \Carbon\Carbon::today()->toDateString
     <div class="card shadow mb-4">
         <div class="card-header py-3 bg-white">
             <h6 class="m-0 font-weight-bold text-primary text-center text-uppercase">
-                Trial Balance as of {{ \Carbon\Carbon::parse($endDate)->format('F d, Y') }}
+                Trial Balance as of <?php echo e(\Carbon\Carbon::parse($endDate)->format('F d, Y')); ?>
+
             </h6>
         </div>
         <div class="card-body">
@@ -40,33 +41,34 @@ $endDate = $endDate ?? request('end_date', \Carbon\Carbon::today()->toDateString
                     <thead class="bg-dark text-white text-center">
                         <tr>
                             <th class="text-left" style="width: 40%;">Account Name</th>
-                            <th style="width: 20%;">Total Debit ({{ $currency }})</th>
-                            <th style="width: 20%;">Total Credit ({{ $currency }})</th>
-                            <th style="width: 20%;">Closing Balance ({{ $currency }})</th>
+                            <th style="width: 20%;">Total Debit (<?php echo e($currency); ?>)</th>
+                            <th style="width: 20%;">Total Credit (<?php echo e($currency); ?>)</th>
+                            <th style="width: 20%;">Closing Balance (<?php echo e($currency); ?>)</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @php 
+                        <?php 
                             $grandTotalDr = 0; 
                             $grandTotalCr = 0;
                             $groupedAccounts = $accounts->groupBy('group');
-                        @endphp
+                        ?>
 
-                        @forelse(['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses'] as $groupName)
-                            @if(isset($groupedAccounts[$groupName]))
-                                {{-- Group Header --}}
+                        <?php $__empty_1 = true; $__currentLoopData = ['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $groupName): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                            <?php if(isset($groupedAccounts[$groupName])): ?>
+                                
                                 <tr class="bg-light">
                                     <td colspan="4" class="font-weight-bold text-uppercase text-primary">
-                                        <i class="fas fa-folder-open me-2"></i> {{ $groupName }}
+                                        <i class="fas fa-folder-open me-2"></i> <?php echo e($groupName); ?>
+
                                     </td>
                                 </tr>
 
-                                @php 
+                                <?php 
                                     $groupDr = 0; $groupCr = 0; $groupBal = 0;
-                                @endphp
+                                ?>
 
-                                @foreach($groupedAccounts[$groupName] as $acc)
-                                    @php
+                                <?php $__currentLoopData = $groupedAccounts[$groupName]; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $acc): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                                    <?php
                                         $dr = $acc->debit ?? 0;
                                         $cr = $acc->credit ?? 0;
                                         $grandTotalDr += $dr;
@@ -81,42 +83,43 @@ $endDate = $endDate ?? request('end_date', \Carbon\Carbon::today()->toDateString
                                             $closingBal = $cr - $dr; // Credit Normal
                                         }
                                         $groupBal += $closingBal;
-                                    @endphp
+                                    ?>
                                     <tr>
-                                        <td class="pl-4">{{ $acc->name }}</td>
-                                        <td class="text-end">{{ number_format($dr) }}</td>
-                                        <td class="text-end">{{ number_format($cr) }}</td>
-                                        <td class="text-end font-weight-bold {{ $closingBal < 0 ? 'text-danger' : '' }}">
-                                            {{ number_format(abs($closingBal)) }} {{ $closingBal < 0 ? '(Negative)' : '' }}
+                                        <td class="pl-4"><?php echo e($acc->name); ?></td>
+                                        <td class="text-end"><?php echo e(number_format($dr)); ?></td>
+                                        <td class="text-end"><?php echo e(number_format($cr)); ?></td>
+                                        <td class="text-end font-weight-bold <?php echo e($closingBal < 0 ? 'text-danger' : ''); ?>">
+                                            <?php echo e(number_format(abs($closingBal))); ?> <?php echo e($closingBal < 0 ? '(Negative)' : ''); ?>
+
                                         </td>
                                     </tr>
-                                @endforeach
+                                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                                 
-                                {{-- Group Subtotals --}}
+                                
                                 <tr class="bg-light font-weight-bold font-italic">
-                                    <td class="text-end text-muted">Total {{ $groupName }}:</td>
-                                    <td class="text-end text-muted">{{ number_format($groupDr) }}</td>
-                                    <td class="text-end text-muted">{{ number_format($groupCr) }}</td>
-                                    <td class="text-end text-dark border-start">{{ number_format(abs($groupBal)) }}</td>
+                                    <td class="text-end text-muted">Total <?php echo e($groupName); ?>:</td>
+                                    <td class="text-end text-muted"><?php echo e(number_format($groupDr)); ?></td>
+                                    <td class="text-end text-muted"><?php echo e(number_format($groupCr)); ?></td>
+                                    <td class="text-end text-dark border-start"><?php echo e(number_format(abs($groupBal))); ?></td>
                                 </tr>
-                            @endif
-                        @empty
+                            <?php endif; ?>
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                             <tr>
                                 <td colspan="4" class="text-center py-4">No accounts found to generate Trial Balance.</td>
                             </tr>
-                        @endforelse
+                        <?php endif; ?>
                     </tbody>
                     <tfoot class="bg-dark text-white font-weight-bold">
                         <tr>
                             <td class="text-end text-uppercase">Grand Totals:</td>
-                            <td class="text-end border-end">{{ $currency }} {{ number_format($grandTotalDr) }}</td>
-                            <td class="text-end border-end">{{ $currency }} {{ number_format($grandTotalCr) }}</td>
+                            <td class="text-end border-end"><?php echo e($currency); ?> <?php echo e(number_format($grandTotalDr)); ?></td>
+                            <td class="text-end border-end"><?php echo e($currency); ?> <?php echo e(number_format($grandTotalCr)); ?></td>
                             <td class="text-center">
-                                @if(round($grandTotalDr) == round($grandTotalCr))
+                                <?php if(round($grandTotalDr) == round($grandTotalCr)): ?>
                                     <span class="text-success"><i class="fas fa-check-circle"></i> Balanced</span>
-                                @else
-                                    <span class="text-warning"><i class="fas fa-exclamation-triangle"></i> Unbalanced by {{ $currency }} {{ number_format(abs($grandTotalDr - $grandTotalCr)) }}</span>
-                                @endif
+                                <?php else: ?>
+                                    <span class="text-warning"><i class="fas fa-exclamation-triangle"></i> Unbalanced by <?php echo e($currency); ?> <?php echo e(number_format(abs($grandTotalDr - $grandTotalCr))); ?></span>
+                                <?php endif; ?>
                             </td>
                         </tr>
                     </tfoot>
@@ -135,4 +138,5 @@ $endDate = $endDate ?? request('end_date', \Carbon\Carbon::today()->toDateString
         .main-content { margin-left: 0 !important; width: 100% !important; padding: 0 !important; }
     }
 </style>
-@endsection
+<?php $__env->stopSection(); ?>
+<?php echo $__env->make('layouts.manager', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH C:\xampp\htdocs\agile_accounts\agile_accounts\resources\views/loan-manager/reports/trial-balance.blade.php ENDPATH**/ ?>

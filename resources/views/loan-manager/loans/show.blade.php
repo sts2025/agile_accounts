@@ -34,8 +34,28 @@
     </div>
 
     @if(session('status'))
-        <div class="alert alert-success alert-dismissible fade show">
-            {{ session('status') }}
+        <div class="alert alert-success alert-dismissible fade show shadow-sm">
+            <i class="fas fa-check-circle me-2"></i> {{ session('status') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    @endif
+
+    {{-- ADDED: Display hidden Validation or Database Errors --}}
+    @if($errors->any())
+        <div class="alert alert-danger alert-dismissible fade show shadow-sm border-start border-danger border-4">
+            <strong><i class="fas fa-exclamation-circle me-2"></i> Payment Failed to Save!</strong>
+            <ul class="mb-0 mt-2">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    @endif
+
+    @if(session('error'))
+        <div class="alert alert-danger alert-dismissible fade show shadow-sm">
+            <i class="fas fa-exclamation-triangle me-2"></i> {{ session('error') }}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     @endif
@@ -190,19 +210,21 @@
                             <div class="d-flex justify-content-between align-items-center mb-3">
                                 <h6 class="font-weight-bold text-success m-0">Payment History</h6>
                                 {{-- Trigger Modal (BS5 Syntax) --}}
-                                <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addPaymentModal">
-                                    <i class="fas fa-plus"></i> Add Payment
+                                <button class="btn btn-sm btn-success fw-bold" data-bs-toggle="modal" data-bs-target="#addPaymentModal">
+                                    <i class="fas fa-plus me-1"></i> Record Payment
                                 </button>
                             </div>
                             
                             @if($loan->payments->count() > 0)
                                 <div class="table-responsive">
-                                    <table class="table table-bordered table-hover">
+                                    <table class="table table-bordered table-hover align-middle">
                                         <thead class="table-light">
                                             <tr>
                                                 <th>Date</th>
                                                 <th>Receipt #</th>
-                                                <th>Amount</th>
+                                                <th class="text-end">Principal</th>
+                                                <th class="text-end">Interest</th>
+                                                <th class="text-end">Total Amount</th>
                                                 <th>Method</th>
                                                 <th>Action</th>
                                             </tr>
@@ -211,9 +233,11 @@
                                             @foreach($loan->payments->sortByDesc('payment_date') as $payment)
                                             <tr>
                                                 <td>{{ \Carbon\Carbon::parse($payment->payment_date)->format('d M, Y') }}</td>
-                                                <td>{{ $payment->reference_id ?? $payment->receipt_number ?? '-' }}</td>
-                                                <td class="text-success fw-bold">{{ number_format($payment->amount_paid) }}</td>
-                                                <td>{{ ucfirst($payment->payment_method) }}</td>
+                                                <td class="text-muted small">{{ $payment->reference_id ?? $payment->receipt_number ?? '-' }}</td>
+                                                <td class="text-end text-primary font-monospace">{{ number_format($payment->principal_paid) }}</td>
+                                                <td class="text-end text-warning font-monospace">{{ number_format($payment->interest_paid) }}</td>
+                                                <td class="text-end text-success fw-bold bg-light font-monospace">{{ number_format($payment->amount_paid) }}</td>
+                                                <td><span class="badge bg-secondary">{{ ucfirst($payment->payment_method) }}</span></td>
                                                 <td>
                                                     <a href="{{ route('payments.receipt', $payment->id) }}" class="btn btn-sm btn-info text-white" target="_blank" title="Print Receipt">
                                                         <i class="fas fa-print"></i>
@@ -232,7 +256,7 @@
                                 <div class="text-center py-5 bg-light rounded">
                                     <i class="fas fa-receipt fa-3x text-secondary mb-3"></i>
                                     <p class="text-muted">No payments recorded yet.</p>
-                                    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addPaymentModal">Record First Payment</button>
+                                    <button class="btn btn-primary btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#addPaymentModal">Record First Payment</button>
                                 </div>
                             @endif
                         </div>
@@ -320,45 +344,85 @@
     </div>
 </div>
 
-{{-- Add Payment Modal (BS5 Syntax) --}}
+{{-- UPDATED Add Payment Modal with Split Logic (BS5 Syntax) --}}
 <div class="modal fade" id="addPaymentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
-        <div class="modal-content">
+        <div class="modal-content border-0 shadow-lg">
             <form action="{{ route('payments.store') }}" method="POST">
                 @csrf
                 <input type="hidden" name="loan_id" value="{{ $loan->id }}">
                 
-                <div class="modal-header">
-                    <h5 class="modal-title">Record New Payment</h5>
-                    {{-- BS5 Close Button --}}
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-hand-holding-usd me-2"></i>Record New Payment</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Amount ({{ $currency }})</label>
-                        <input type="number" name="amount_paid" class="form-control" required min="1">
+                <div class="modal-body bg-light">
+                    {{-- NEW: Split Payment Breakdown --}}
+                    <div class="card p-3 border-success bg-white shadow-sm mb-3">
+                        <h6 class="text-success fw-bold mb-3 border-bottom pb-2">Payment Breakdown</h6>
+                        
+                        <div class="row mb-2">
+                            <div class="col-7"><label class="mb-0 fw-bold">Principal Paid:</label></div>
+                            <div class="col-5">
+                                <input type="number" name="principal_paid" id="detailModalPrincipal" class="form-control text-end fw-bold" placeholder="0" min="0" required oninput="calcDetailModalTotal()">
+                            </div>
+                        </div>
+
+                        <div class="row mb-2">
+                            <div class="col-7"><label class="mb-0 fw-bold">Interest Paid:</label></div>
+                            <div class="col-5">
+                                <input type="number" name="interest_paid" id="detailModalInterest" class="form-control text-end fw-bold" placeholder="0" min="0" required oninput="calcDetailModalTotal()">
+                            </div>
+                        </div>
+
+                        <div class="row mt-3 pt-2 border-top">
+                            <div class="col-7"><label class="mb-0 fw-bold text-uppercase">Total Amount:</label></div>
+                            <div class="col-5 text-end"><h5 class="mb-0 fw-bold text-success" id="detailModalTotal">0.00</h5></div>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Payment Date</label>
-                        <input type="date" name="payment_date" class="form-control" value="{{ date('Y-m-d') }}" required>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted">Payment Date</label>
+                            <input type="date" name="payment_date" class="form-control shadow-sm" value="{{ date('Y-m-d') }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted">Method</label>
+                            <select name="payment_method" class="form-select shadow-sm">
+                                <option value="Cash" selected>Cash</option>
+                                <option value="Bank Transfer">Bank Transfer</option>
+                                <option value="Mobile Money">Mobile Money</option>
+                            </select>
+                        </div>
                     </div>
+                    
                     <div class="mb-3">
-                        <label class="form-label">Method</label>
-                        <select name="payment_method" class="form-select">
-                            <option value="Cash" selected>Cash</option>
-                            <option value="Bank">Bank Transfer</option>
-                            <option value="Mobile Money">Mobile Money</option>
-                        </select>
+                        <label class="form-label fw-bold small text-muted">Reference / Notes</label>
+                        <input type="text" name="notes" class="form-control shadow-sm" placeholder="Optional details">
                     </div>
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer bg-white border-top-0">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">Save Payment</button>
+                    <button type="submit" class="btn btn-success px-4 fw-bold shadow-sm">Save Payment</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+
+@push('scripts')
+<script>
+    // Live calculation logic for the Split Payment Modal on the Loan Details page
+    function calcDetailModalTotal() {
+        let p = parseFloat(document.getElementById('detailModalPrincipal').value) || 0;
+        let i = parseFloat(document.getElementById('detailModalInterest').value) || 0;
+        let display = document.getElementById('detailModalTotal');
+        if(display) {
+            display.innerText = (p + i).toLocaleString(undefined, {minimumFractionDigits: 2});
+        }
+    }
+</script>
+@endpush
 
 @endsection

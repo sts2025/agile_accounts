@@ -8,7 +8,7 @@
     {{-- Page Heading --}}
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800">Client Profile: {{ $client->name }}</h1>
-        <a href="{{ route('clients.index') }}" class="btn btn-sm btn-secondary shadow-sm">
+        <a href="{{ route('clients.index') }}" class="btn btn-sm btn-secondary shadow-sm no-print">
             <i class="fas fa-arrow-left fa-sm text-white-50"></i> Back to List
         </a>
     </div>
@@ -43,16 +43,20 @@
                     <div class="mb-3">
                         <h6 class="font-weight-bold text-secondary text-uppercase text-xs">Personal Info</h6>
                         <div class="pl-2">
-                            <p class="mb-1"><strong>National ID:</strong> {{ $client->national_id ?? 'N/A' }}</p>
+                            {{-- FIX: Added 'no-print' class to hide sensitive info on paper --}}
+                            <p class="mb-1 no-print"><strong>National ID:</strong> {{ $client->national_id ?? 'N/A' }}</p>
+                            
                             {{-- FIX: Using business_occupation instead of occupation --}}
                             <p class="mb-1"><strong>Occupation:</strong> {{ $client->business_occupation ?? 'N/A' }}</p>
-                            <p class="mb-1"><strong>Date of Birth:</strong> {{ $client->date_of_birth ?? 'N/A' }}</p>
+                            
+                            {{-- FIX: Added 'no-print' class to hide sensitive info on paper --}}
+                            <p class="mb-1 no-print"><strong>Date of Birth:</strong> {{ $client->date_of_birth ?? 'N/A' }}</p>
                         </div>
                     </div>
 
-                    <hr>
+                    <hr class="no-print">
                     
-                    <div class="d-flex justify-content-center">
+                    <div class="d-flex justify-content-center no-print">
                         <a href="{{ route('clients.edit', $client) }}" class="btn btn-primary btn-icon-split btn-sm mr-2">
                             <span class="icon text-white-50"><i class="fas fa-edit"></i></span>
                             <span class="text">Edit Profile</span>
@@ -108,7 +112,7 @@
             <div class="card shadow mb-4">
                 <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
                     <h6 class="m-0 font-weight-bold text-gray-800">Loan History</h6>
-                    <a href="{{ route('loans.create', ['client_id' => $client->id]) }}" class="btn btn-sm btn-success shadow-sm">
+                    <a href="{{ route('loans.create', ['client_id' => $client->id]) }}" class="btn btn-sm btn-success shadow-sm no-print">
                         <i class="fas fa-plus fa-sm text-white-50"></i> New Loan
                     </a>
                 </div>
@@ -122,7 +126,7 @@
                                         <th>Principal</th>
                                         <th>Date Given</th>
                                         <th>Status</th>
-                                        <th>Action</th>
+                                        <th class="no-print">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -138,13 +142,13 @@
                                         <td>
                                             @if($loan->status === 'paid')
                                                 <span class="badge badge-success px-2 py-1">Paid</span>
-                                            @elseif($loan->status === 'approved')
+                                            @elseif($loan->status === 'approved' || $loan->status === 'active')
                                                 <span class="badge badge-info px-2 py-1">Active</span>
                                             @else
                                                 <span class="badge badge-warning px-2 py-1">{{ ucfirst($loan->status) }}</span>
                                             @endif
                                         </td>
-                                        <td>
+                                        <td class="no-print">
                                             <a href="{{ route('loans.show', $loan->id) }}" class="btn btn-info btn-circle btn-sm" title="View Loan">
                                                 <i class="fas fa-eye"></i>
                                             </a>
@@ -165,4 +169,12 @@
         </div>
     </div>
 </div>
+
+<style>
+    @media print {
+        .no-print { display: none !important; }
+        .card { border: none !important; box-shadow: none !important; }
+        .navbar, .sidebar { display: none !important; }
+    }
+</style>
 @endsection

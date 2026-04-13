@@ -216,8 +216,20 @@
 
         <!-- 3. PAYMENT FINANCIALS -->
         <div class="financials">
+            <div class="info-row">
+                <span class="label">Principal Paid:</span>
+                <span class="value">{{ $currency }} {{ number_format($payment->principal_paid ?? 0, 0) }}</span>
+            </div>
+            
+            <div class="info-row">
+                <span class="label">Interest Paid:</span>
+                <span class="value">{{ $currency }} {{ number_format($payment->interest_paid ?? 0, 0) }}</span>
+            </div>
+
+            <div class="dashed-line"></div>
+
             <div class="info-row" style="font-size: 16px; margin: 10px 0;">
-                <span class="label font-bold">AMOUNT PAID:</span>
+                <span class="label font-bold">TOTAL PAID:</span>
                 <span class="value font-bold">{{ $currency }} {{ number_format($payment->amount_paid ?? 0, 0) }}</span>
             </div>
             

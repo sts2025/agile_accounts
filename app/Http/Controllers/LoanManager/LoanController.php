@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\LoanManager;
 
-use Illuminate\Routing\Controller; 
+use App\Http\Controllers\Controller; 
 use App\Models\Loan;
 use App\Models\Client;
 use App\Models\Account;
@@ -16,24 +16,34 @@ use Illuminate\Validation\Rule;
 use Carbon\Carbon;
 use Barryvdh\DomPDF\Facade\Pdf;
 
-class LoanController extends Controller
+// --- NEW IMPORTS FOR LARAVEL 11/12 MIDDLEWARE ---
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
+
+class LoanController extends Controller implements HasMiddleware
 {
     /**
-     * Constructor to apply elevated privileges middleware.
+     * Get the middleware that should be assigned to the controller.
+     * This replaces the old $this->middleware() in the constructor.
      */
-    public function __construct()
+    public static function middleware(): array
     {
-        $this->middleware('elevated')->only(['update', 'destroy']);
+        return [
+            // Ensure only authorized users can update or delete records
+            new Middleware('elevated', only: ['update', 'destroy']),
+        ];
     }
 
+    /**
+     * Display the list of loans for the manager.
+     */
     public function index(Request $request)
     {
         $loanManager = Auth::user()->loanManager;
         
-        // FIX 1: Eager load 'payments' so we can calculate balance in the view
         $query = $loanManager->loans()->with(['client', 'payments']);
 
-        // --- 1. Search Logic ---
+        // Search by Client Name
         if ($search = $request->input('search')) {
             $query->whereHas('client', function($subQuery) use ($search) {
                 $searchTerm = strtolower($search);
@@ -41,7 +51,7 @@ class LoanController extends Controller
             });
         }
 
-        // --- 2. Sidebar Filter Logic ---
+        // Sidebar Status Filters
         if ($filter = $request->input('filter')) {
             if ($filter === 'completed') {
                 $query->where('status', 'paid');
@@ -53,13 +63,14 @@ class LoanController extends Controller
         }
         
         $currency_symbol = $loanManager->currency_symbol ?? 'UGX'; 
-
-        // FIX 2: Use paginate instead of get() for better performance with lists
         $loans = $query->latest()->paginate(10); 
         
         return view('loan-manager.loans.index', compact('loans', 'currency_symbol'));
     }
 
+    /**
+     * Show create loan form.
+     */
     public function create()
     {
         $clients = Auth::user()->loanManager->clients()
@@ -69,6 +80,9 @@ class LoanController extends Controller
         return view('loan-manager.loans.create', compact('clients'));
     }
 
+    /**
+     * Store a new loan record.
+     */
     public function store(Request $request)
     {
         $loanManagerId = Auth::user()->loanManager->id;
@@ -82,7 +96,7 @@ class LoanController extends Controller
             'repayment_frequency' => 'required|string|in:Daily,Weekly,Monthly',
             'start_date' => 'required|date', 
 
-            // Guarantor Checks
+            // Guarantor validation
             'guarantor_first_name' => 'nullable|string|max:255',
             'guarantor_last_name' => 'required_with:guarantor_first_name|string|max:255',
             'guarantor_phone_number' => 'required_with:guarantor_first_name|string|max:20',
@@ -90,13 +104,15 @@ class LoanController extends Controller
             'guarantor_occupation' => 'nullable|string|max:255',
             'guarantor_relationship' => 'required_with:guarantor_first_name|string|max:100',
 
-            // Collateral Checks
+            // Collateral validation
             'collateral_type' => 'nullable|string|max:100',
             'collateral_description' => 'required_with:collateral_type|string',
             'collateral_valuation_amount' => 'required_with:collateral_type|numeric|min:1', 
         ]);
 
         DB::transaction(function () use ($validatedData, $request, $loanManagerId) {
+            $loanCount = Loan::where('loan_manager_id', $loanManagerId)->count();
+            
             $loan = Loan::create([
                 'client_id' => $validatedData['client_id'],
                 'loan_manager_id' => $loanManagerId,
@@ -107,8 +123,7 @@ class LoanController extends Controller
                 'repayment_frequency' => $validatedData['repayment_frequency'],
                 'start_date' => $validatedData['start_date'],
                 'status' => 'active',
-                // Auto-generate Reference ID
-                'reference_id' => 'LN-' . str_pad(Loan::where('loan_manager_id', $loanManagerId)->count() + 1, 4, '0', STR_PAD_LEFT),
+                'reference_id' => 'LN-' . str_pad($loanCount + 1, 4, '0', STR_PAD_LEFT),
             ]);
 
             if ($request->filled('guarantor_first_name')) {
@@ -136,6 +151,9 @@ class LoanController extends Controller
         return redirect()->route('loans.index')->with('success', 'New loan created and recorded successfully!');
     }
 
+    /**
+     * Update loan status via AJAX.
+     */
     public function updateStatus(Request $request, Loan $loan)
     {
         if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { 
@@ -157,6 +175,9 @@ class LoanController extends Controller
         ]);
     }
 
+    /**
+     * Show loan repayment calculator.
+     */
     public function showCalculator(Request $request)
     {
         $schedule = [];
@@ -211,6 +232,9 @@ class LoanController extends Controller
         ));
     }
 
+    /**
+     * Show loan details.
+     */
     public function show(Loan $loan)
     {
         if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
@@ -242,12 +266,18 @@ class LoanController extends Controller
         return view('loan-manager.loans.show', compact('loan', 'schedule'));
     }
 
+    /**
+     * Show edit loan form.
+     */
     public function edit(Loan $loan)
     {
         if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
         return view('loan-manager.loans.edit', compact('loan'));
     }
 
+    /**
+     * Update loan record.
+     */
     public function update(Request $request, Loan $loan)
     {
         if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
@@ -264,6 +294,9 @@ class LoanController extends Controller
         return redirect()->route('loans.show', $loan->id)->with('status', 'Loan details have been updated successfully!');
     }
 
+    /**
+     * Delete loan record.
+     */
     public function destroy(Loan $loan)
     {
         if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
@@ -271,6 +304,9 @@ class LoanController extends Controller
         return redirect()->route('loans.index')->with('status', 'Loan has been deleted successfully.');
     }
 
+    /**
+     * Record accounting entries for loan disbursement.
+     */
     private function recordLoanDisbursement(Loan $loan)
     {
         $loansReceivableAccount = Account::where('name', 'Loans Receivable')->first();
@@ -317,15 +353,20 @@ class LoanController extends Controller
         }
     }
 
-    public function downloadLoanAgreement(Loan $loan)
+    /**
+     * Generate printable Loan Agreement.
+     * Matches Route name 'loans.downloadAgreement'
+     */
+    public function downloadLoanAgreement($id)
     {
-        if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
+        $loan = Loan::with(['client', 'loanManager', 'guarantors', 'collaterals'])->findOrFail($id);
         
-        $loan->load('client', 'guarantors', 'collaterals');
-        $loanManager = Auth::user()->loanManager;
+        // Security check
+        if ($loan->loan_manager_id !== Auth::user()->loanManager->id) {
+            abort(403, 'Unauthorized');
+        }
 
-        $pdf = Pdf::loadView('reports.pdf.loan-agreement', compact('loan', 'loanManager'));
-        
-        return $pdf->stream('loan-agreement-'.$loan->id.'.pdf');
+        // Return the printable layout view
+        return view('loan-manager.loans.agreement-pdf', compact('loan'));
     }
 }

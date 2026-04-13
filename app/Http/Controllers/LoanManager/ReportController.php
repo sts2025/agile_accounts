@@ -96,17 +96,26 @@ class ReportController extends Controller
             (object)[ 'name' => 'Processing Fee Income', 'period_total' => $totalProcessingFee ],
         ]);
 
-        // 3. Other Inflows
+        // 3. Other Inflows (Excluding equity/savings)
         $otherIncome = $manager->cashTransactions()
             ->where('type', 'inflow')
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->get()
+            ->toBase() // FIX: Converts Eloquent collection to standard collection to prevent getKey() error
+            ->filter(function($tx) {
+                $desc = strtolower($tx->description);
+                return !str_contains($desc, 'capital') && 
+                       !str_contains($desc, 'grant') && 
+                       !str_contains($desc, 'donation') && 
+                       !str_contains($desc, 'saving');
+            })
             ->groupBy('description') 
             ->map(function ($group, $name) {
                 return (object)['name' => $name ?: 'Other Income', 'period_total' => $group->sum('amount')];
             })->values();
 
-        $incomeAccounts = $loanIncome->merge($otherIncome);
+        // FIX: Use concat() instead of merge()
+        $incomeAccounts = $loanIncome->concat($otherIncome);
 
         // --- EXPENSES ---
         // 1. Expenses from Expenses Table
@@ -114,6 +123,7 @@ class ReportController extends Controller
             ->whereBetween('expense_date', [$startDate, $endDate])
             ->with('category')
             ->get()
+            ->toBase() // FIX
             ->groupBy(function($expense) {
                 return $expense->category->name ?? 'Uncategorized';
             })
@@ -126,12 +136,14 @@ class ReportController extends Controller
             ->where('type', 'outflow')
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->get()
+            ->toBase() // FIX
             ->groupBy('description')
             ->map(function ($group, $name) {
                 return (object)['name' => $name ?: 'General Expenses', 'period_total' => $group->sum('amount')];
             })->values();
 
-        $expenseAccounts = $categorizedExpenses->merge($otherExpenses);
+        // FIX: Use concat() instead of merge()
+        $expenseAccounts = $categorizedExpenses->concat($otherExpenses);
 
         // --- TOTALS ---
         $totalIncome = $incomeAccounts->sum('period_total');
