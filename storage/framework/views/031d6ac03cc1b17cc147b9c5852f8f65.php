@@ -3,11 +3,11 @@
 // are correctly passed by the DashboardController.
 $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
 ?>
-@extends('layouts.manager')
-@section('title', 'Loan Manager Dashboard')
 
-@push('styles')
-    {{-- Select2 CSS for the Searchable Dropdown --}}
+<?php $__env->startSection('title', 'Loan Manager Dashboard'); ?>
+
+<?php $__env->startPush('styles'); ?>
+    
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <style>
         /* Make Select2 match Bootstrap 5 styling */
@@ -30,58 +30,60 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
             margin-right: 5px;
         }
     </style>
-@endpush
+<?php $__env->stopPush(); ?>
 
-@section('content')
+<?php $__env->startSection('content'); ?>
 
-    {{-- ERROR/SUCCESS ALERTS --}}
-    @if(session('success'))
+    
+    <?php if(session('success')): ?>
         <div class="alert alert-success alert-dismissible fade show shadow-sm border-start border-success border-4">
-            <i class="fas fa-check-circle me-2"></i> {{ session('success') }}
+            <i class="fas fa-check-circle me-2"></i> <?php echo e(session('success')); ?>
+
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
-    @endif
+    <?php endif; ?>
 
-    @if($errors->any())
+    <?php if($errors->any()): ?>
         <div class="alert alert-danger alert-dismissible fade show shadow-sm border-start border-danger border-4">
             <strong><i class="fas fa-exclamation-circle me-2"></i> Action Failed!</strong>
             <ul class="mb-0 mt-2">
-                @foreach($errors->all() as $error)
-                    <li>{{ $error }}</li>
-                @endforeach
+                <?php $__currentLoopData = $errors->all(); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $error): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                    <li><?php echo e($error); ?></li>
+                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
             </ul>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
-    @endif
-    @if(session('error'))
+    <?php endif; ?>
+    <?php if(session('error')): ?>
         <div class="alert alert-danger alert-dismissible fade show shadow-sm border-start border-danger border-4">
-            <i class="fas fa-exclamation-triangle me-2"></i> {{ session('error') }}
+            <i class="fas fa-exclamation-triangle me-2"></i> <?php echo e(session('error')); ?>
+
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
-    @endif
+    <?php endif; ?>
 
 
-    {{-- ========================================== --}}
-    {{-- MFI UPGRADE BANNER                         --}}
-    {{-- ========================================== --}}
-    @php
+    
+    
+    
+    <?php
         $isMfi = optional(Auth::user()->getCompany())->is_mfi ?? false;
-    @endphp
+    ?>
 
-    @if(!$isMfi)
+    <?php if(!$isMfi): ?>
         <div class="alert shadow-sm border-0 d-flex justify-content-between align-items-center mb-4 rounded" style="background-color: #fff3cd;">
             <div>
                 <h5 class="mb-1 fw-bold text-dark"><i class="fas fa-rocket text-warning me-2"></i> Unlock Microfinance Features!</h5>
                 <p class="mb-0 text-muted small">Upgrade your account to access Savings Accounts, General Ledger, Teller Operations, and Automated Penalties. Your existing loans will be safely integrated.</p>
             </div>
-            <form action="{{ route('mfi.upgrade') }}" method="POST" onsubmit="return confirm('Are you sure you want to upgrade your system to the MFI Engine?');">
-                @csrf
+            <form action="<?php echo e(route('mfi.upgrade')); ?>" method="POST" onsubmit="return confirm('Are you sure you want to upgrade your system to the MFI Engine?');">
+                <?php echo csrf_field(); ?>
                 <button type="submit" class="btn btn-dark fw-bold px-4 shadow-sm">
                     Upgrade to MFI
                 </button>
             </form>
         </div>
-    @else
+    <?php else: ?>
         <div class="alert alert-success shadow-sm border-0 mb-4 rounded" style="background-color: #d1e7dd;">
             <div class="d-flex align-items-center">
                 <i class="fas fa-crown fa-2x text-success me-3"></i>
@@ -91,17 +93,17 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                 </div>
             </div>
         </div>
-    @endif
-    {{-- ========================================== --}}
+    <?php endif; ?>
+    
 
 
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3 mb-0 text-gray-800">Dashboard</h1>
         <div class="btn-group" role="group">
-            <a href="{{ route('clients.create') }}" class="btn btn-primary">
+            <a href="<?php echo e(route('clients.create')); ?>" class="btn btn-primary">
                 <i class="fas fa-user-plus me-1"></i> Add New Client
             </a>
-            <a href="{{ route('loans.create') }}" class="btn btn-success">
+            <a href="<?php echo e(route('loans.create')); ?>" class="btn btn-success">
                 <i class="fas fa-hand-holding-usd me-1"></i> Create New Loan
             </a>
             <button type="button" class="btn btn-info text-white" data-bs-toggle="modal" data-bs-target="#recordPaymentModal">
@@ -111,14 +113,14 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
     </div>
 
     <div class="row">
-        {{-- Total Clients --}}
+        
         <div class="col-xl-4 col-md-6 mb-4">
             <div class="card border-left-primary shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Clients</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ $totalClients ?? 0 }}</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo e($totalClients ?? 0); ?></div>
                         </div>
                         <div class="col-auto">
                             <i class="fas fa-users fa-2x text-gray-300 icon-lg"></i>
@@ -127,14 +129,14 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                 </div>
             </div>
         </div>
-        {{-- Active Loans --}}
+        
         <div class="col-xl-4 col-md-6 mb-4">
             <div class="card border-left-success shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Active Loans</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ $activeLoansCount ?? 0 }}</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo e($activeLoansCount ?? 0); ?></div>
                         </div>
                         <div class="col-auto">
                             <i class="fas fa-dollar-sign fa-2x text-gray-300 icon-lg"></i>
@@ -143,14 +145,14 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                 </div>
             </div>
         </div>
-        {{-- Total Loaned Amount --}}
+        
         <div class="col-xl-4 col-md-6 mb-4">
             <div class="card border-left-info shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Total Loaned Amount</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ $currencySymbol }} {{ number_format($totalLoanedAmount ?? 0, 0) }}</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo e($currencySymbol); ?> <?php echo e(number_format($totalLoanedAmount ?? 0, 0)); ?></div>
                         </div>
                         <div class="col-auto">
                             <i class="fas fa-piggy-bank fa-2x text-gray-300 icon-lg"></i>
@@ -177,10 +179,10 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                 Add Expenses
             </button>
             
-            <a href="{{ route('clients.index') }}" class="btn btn-success">View Client List</a>
-            <a href="{{ route('loans.index') }}" class="btn btn-secondary">View Loan List</a>
-            <a href="{{ route('reports.print-forms') }}" class="btn btn-dark">Print Forms</a>
-            <a href="{{ route('reports.general-ledger') }}" class="btn btn-warning text-dark">
+            <a href="<?php echo e(route('clients.index')); ?>" class="btn btn-success">View Client List</a>
+            <a href="<?php echo e(route('loans.index')); ?>" class="btn btn-secondary">View Loan List</a>
+            <a href="<?php echo e(route('reports.print-forms')); ?>" class="btn btn-dark">Print Forms</a>
+            <a href="<?php echo e(route('reports.general-ledger')); ?>" class="btn btn-warning text-dark">
                 View General Ledger
             </a>
 
@@ -204,38 +206,38 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
         <div class="col-xl-4 col-lg-5">
             <div class="card shadow mb-4">
                 <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Daily Report ({{ $reportDate->format('d M, Y') }})</h6>
+                    <h6 class="m-0 font-weight-bold text-primary">Daily Report (<?php echo e($reportDate->format('d M, Y')); ?>)</h6>
                 </div>
                 <div class="card-body">
-                    <form method="GET" action="{{ route('reports.daily') }}" class="d-flex mb-3">
-                        <input type="date" name="date" class="form-control me-2" value="{{ $reportDate->format('Y-m-d') }}">
+                    <form method="GET" action="<?php echo e(route('reports.daily')); ?>" class="d-flex mb-3">
+                        <input type="date" name="date" class="form-control me-2" value="<?php echo e($reportDate->format('Y-m-d')); ?>">
                         <button type="submit" class="btn btn-secondary">Go</button>
                     </form>
                     <div class="d-flex justify-content-between mb-2">
                         <span>Opening Balance:</span>
-                        <strong>{{ $currencySymbol }} {{ number_format($openingBalance, 0) }}</strong>
+                        <strong><?php echo e($currencySymbol); ?> <?php echo e(number_format($openingBalance, 0)); ?></strong>
                     </div>
                     <div class="d-flex justify-content-between mb-2 text-success">
                         <span>Payments Received:</span>
-                        <strong>+ {{ $currencySymbol }} {{ number_format($totalPaidCash, 0) }}</strong>
+                        <strong>+ <?php echo e($currencySymbol); ?> <?php echo e(number_format($totalPaidCash, 0)); ?></strong>
                     </div>
                     <div class="d-flex justify-content-between mb-2 text-danger">
                         <span>Loans Given:</span>
-                        <strong>- {{ $currencySymbol }} {{ number_format($totalLoanGiven, 0) }}</strong>
+                        <strong>- <?php echo e($currencySymbol); ?> <?php echo e(number_format($totalLoanGiven, 0)); ?></strong>
                     </div>
                     <hr>
                     <div class="d-flex justify-content-between fw-bold h5">
                         <span>Closing Stock:</span>
-                        <strong>{{ $currencySymbol }} {{ number_format($closingStock, 0) }}</strong>
+                        <strong><?php echo e($currencySymbol); ?> <?php echo e(number_format($closingStock, 0)); ?></strong>
                     </div>
                 </div>
             </div>
         </div>
     </div>
     
-    @push('modals')
+    <?php $__env->startPush('modals'); ?>
     
-        {{-- Record Payment Modal --}}
+        
         <div class="modal fade" id="recordPaymentModal" tabindex="-1" aria-labelledby="recordPaymentModalLabel" aria-hidden="true">
             <div class="modal-dialog">
                 <div class="modal-content">
@@ -243,16 +245,16 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                         <h5 class="modal-title fw-bold" id="recordPaymentModalLabel">Record a Payment</h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <form action="{{ route('payments.store') }}" method="POST">
-                        @csrf
+                    <form action="<?php echo e(route('payments.store')); ?>" method="POST">
+                        <?php echo csrf_field(); ?>
                         <div class="modal-body bg-light">
                             <div class="mb-3">
                                 <label for="client_id_select" class="form-label fw-bold small text-muted">Search & Select Client</label>
                                 <select class="form-select shadow-sm" id="client_id_select" name="client_id" style="width: 100%;" required>
                                     <option value="" selected disabled>Type client name...</option>
-                                    @foreach($allClientsWithLoans as $client)
-                                        <option value="{{ $client->id }}" data-loans="{{ json_encode($client->loans) }}">{{ $client->name }}</option>
-                                    @endforeach
+                                    <?php $__currentLoopData = $allClientsWithLoans; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $client): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                                        <option value="<?php echo e($client->id); ?>" data-loans="<?php echo e(json_encode($client->loans)); ?>"><?php echo e($client->name); ?></option>
+                                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                                 </select>
                             </div>
                             <div class="mb-3">
@@ -262,7 +264,7 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                                 </select>
                             </div>
                             
-                            {{-- SPLIT PAYMENT BREAKDOWN --}}
+                            
                             <div class="card p-3 border-success bg-white shadow-sm mb-3">
                                 <h6 class="text-success fw-bold mb-3 border-bottom pb-2">Payment Breakdown</h6>
                                 <div class="row mb-2">
@@ -286,7 +288,7 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                             <div class="row g-2 mb-3">
                                 <div class="col-6">
                                     <label for="payment_date" class="form-label fw-bold small text-muted">Date</label>
-                                    <input type="date" class="form-control shadow-sm" id="payment_date" name="payment_date" value="{{ now()->toDateString() }}" required>
+                                    <input type="date" class="form-control shadow-sm" id="payment_date" name="payment_date" value="<?php echo e(now()->toDateString()); ?>" required>
                                 </div>
                                 <div class="col-6">
                                     <label for="payment_method" class="form-label fw-bold small text-muted">Method</label>
@@ -316,7 +318,7 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
             </div>
         </div>
 
-        {{-- Add Banking Modal --}}
+        
         <div class="modal fade" id="addBankingModal" tabindex="-1" aria-labelledby="addBankingModalLabel" aria-hidden="true">
             <div class="modal-dialog">
                 <div class="modal-content">
@@ -324,8 +326,8 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                         <h5 class="modal-title fw-bold">Add Bank Deposit / Withdrawal</h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <form action="{{ route('bank-transactions.store') }}" method="POST">
-                        @csrf
+                    <form action="<?php echo e(route('bank-transactions.store')); ?>" method="POST">
+                        <?php echo csrf_field(); ?>
                         <div class="modal-body bg-light">
                             <div class="mb-3">
                                 <label for="bank_description" class="form-label">Description</label>
@@ -339,12 +341,12 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                                 </select>
                             </div>
                             <div class="mb-3">
-                                <label for="bank_amount" class="form-label">Amount ({{ $currencySymbol }})</label>
+                                <label for="bank_amount" class="form-label">Amount (<?php echo e($currencySymbol); ?>)</label>
                                 <input type="number" class="form-control" id="bank_amount" name="amount" required>
                             </div>
                             <div class="mb-3">
                                 <label for="bank_date" class="form-label">Transaction Date</label>
-                                <input type="date" class="form-control" id="bank_date" name="transaction_date" value="{{ now()->toDateString() }}" required>
+                                <input type="date" class="form-control" id="bank_date" name="transaction_date" value="<?php echo e(now()->toDateString()); ?>" required>
                             </div>
                         </div>
                         <div class="modal-footer bg-white border-top-0">
@@ -356,7 +358,7 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
             </div>
         </div>
 
-        {{-- Add Expense Modal --}}
+        
         <div class="modal fade" id="addExpenseModal" tabindex="-1" aria-labelledby="addExpenseModalLabel" aria-hidden="true">
             <div class="modal-dialog">
                 <div class="modal-content">
@@ -364,25 +366,25 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                         <h5 class="modal-title fw-bold">Add Expense</h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <form action="{{ route('expenses.store') }}" method="POST">
-                        @csrf
+                    <form action="<?php echo e(route('expenses.store')); ?>" method="POST">
+                        <?php echo csrf_field(); ?>
                         <div class="modal-body bg-light">
                             <div class="mb-3">
                                 <label for="expense_category_id" class="form-label">Expense Category</label>
                                 <select class="form-select" id="expense_category_id" name="expense_category_id" required>
                                     <option value="" disabled selected>Select a category</option>
-                                    @foreach($expenseCategories as $category)
-                                        <option value="{{ $category->id }}">{{ $category->name }}</option>
-                                    @endforeach
+                                    <?php $__currentLoopData = $expenseCategories; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $category): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                                        <option value="<?php echo e($category->id); ?>"><?php echo e($category->name); ?></option>
+                                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                                 </select>
                             </div>
                             <div class="mb-3">
-                                <label for="expense_amount" class="form-label">Amount ({{ $currencySymbol }})</label>
+                                <label for="expense_amount" class="form-label">Amount (<?php echo e($currencySymbol); ?>)</label>
                                 <input type="number" class="form-control" id="expense_amount" name="amount" required>
                             </div>
                             <div class="mb-3">
                                 <label for="expense_date" class="form-label">Expense Date</label>
-                                <input type="date" class="form-control" id="expense_date" name="expense_date" value="{{ now()->toDateString() }}" required>
+                                <input type="date" class="form-control" id="expense_date" name="expense_date" value="<?php echo e(now()->toDateString()); ?>" required>
                             </div>
                         </div>
                         <div class="modal-footer bg-white border-top-0">
@@ -394,7 +396,7 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
             </div>
         </div>
 
-        {{-- Add Payable / Receivable Modal --}}
+        
         <div class="modal fade" id="addPayableReceivableModal" tabindex="-1" aria-labelledby="addPayableReceivableModalLabel" aria-hidden="true">
             <div class="modal-dialog">
                 <div class="modal-content">
@@ -402,8 +404,8 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                         <h5 class="modal-title fw-bold">Add Payable / Receivable</h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <form action="{{ route('cash-transactions.store') }}" method="POST">
-                        @csrf
+                    <form action="<?php echo e(route('cash-transactions.store')); ?>" method="POST">
+                        <?php echo csrf_field(); ?>
                         <div class="modal-body bg-light">
                             <div class="mb-3">
                                 <label for="pr_description" class="form-label">Description</label>
@@ -417,12 +419,12 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                                 </select>
                             </div>
                             <div class="mb-3">
-                                <label for="pr_amount" class="form-label">Amount ({{ $currencySymbol }})</label>
+                                <label for="pr_amount" class="form-label">Amount (<?php echo e($currencySymbol); ?>)</label>
                                 <input type="number" class="form-control" id="pr_amount" name="amount" required>
                             </div>
                             <div class="mb-3">
                                 <label for="pr_date" class="form-label">Transaction Date</label>
-                                <input type="date" class="form-control" id="pr_date" name="transaction_date" value="{{ now()->toDateString() }}" required>
+                                <input type="date" class="form-control" id="pr_date" name="transaction_date" value="<?php echo e(now()->toDateString()); ?>" required>
                             </div>
                         </div>
                         <div class="modal-footer bg-white border-top-0">
@@ -434,7 +436,7 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
             </div>
         </div>
 
-        {{-- AUTO-OPEN RECEIPT MODAL (Bypasses Popup Blockers 100%) --}}
+        
         <div class="modal fade" id="autoReceiptModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
             <div class="modal-dialog modal-md">
                 <div class="modal-content border-0 shadow-lg">
@@ -443,7 +445,7 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body p-0 bg-light">
-                        {{-- The iframe loads the thermal receipt page right inside the modal --}}
+                        
                         <iframe id="receiptIframe" style="width: 100%; height: 500px; border: none;"></iframe>
                     </div>
                     <div class="modal-footer bg-white">
@@ -455,14 +457,14 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                 </div>
             </div>
         </div>
-    @endpush
+    <?php $__env->stopPush(); ?>
 
-    @push('scripts')
-        {{-- jQuery and Select2 JS (Required for the Searchable Dropdown) --}}
+    <?php $__env->startPush('scripts'); ?>
+        
         <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
-        {{-- Chart.js Import --}}
+        
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
         <script>
@@ -486,7 +488,7 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                 });
 
                 // --- 2. Dynamic Loan Selection based on Client Selection ---
-                const loanCurrencySymbol = "{{ $currencySymbol ?? '' }}";
+                const loanCurrencySymbol = "<?php echo e($currencySymbol ?? ''); ?>";
                 
                 $('#client_id_select').on('change', function() {
                     let selectedOption = $(this).find(':selected');
@@ -526,11 +528,11 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                     new Chart(ctx, {
                         type: 'line',
                         data: {
-                            labels: @json($chartData['labels'] ?? []),
+                            labels: <?php echo json_encode($chartData['labels'] ?? [], 15, 512) ?>,
                             datasets: [
                                 {
                                     label: 'Loans Given',
-                                    data: @json($chartData['loans'] ?? []),
+                                    data: <?php echo json_encode($chartData['loans'] ?? [], 15, 512) ?>,
                                     borderColor: 'rgb(231, 74, 59)',
                                     backgroundColor: 'rgba(231, 74, 59, 0.1)',
                                     tension: 0.3,
@@ -538,7 +540,7 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                                 },
                                 {
                                     label: 'Payments Received',
-                                    data: @json($chartData['payments'] ?? []),
+                                    data: <?php echo json_encode($chartData['payments'] ?? [], 15, 512) ?>,
                                     borderColor: 'rgb(28, 200, 138)',
                                     backgroundColor: 'rgba(28, 200, 138, 0.1)',
                                     tension: 0.3,
@@ -560,8 +562,8 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                 }
 
                 // --- 4. BULLETPROOF AUTO-POPUP RECEIPT LOGIC ---
-                @if(session('print_receipt'))
-                    let receiptUrl = "{{ route('payments.receipt', session('print_receipt')) }}";
+                <?php if(session('print_receipt')): ?>
+                    let receiptUrl = "<?php echo e(route('payments.receipt', session('print_receipt'))); ?>";
                     
                     // Put the receipt inside the iframe
                     document.getElementById('receiptIframe').src = receiptUrl;
@@ -569,7 +571,7 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                     // Trigger the Bootstrap Modal to slide down
                     let receiptModal = new bootstrap.Modal(document.getElementById('autoReceiptModal'));
                     receiptModal.show();
-                @endif
+                <?php endif; ?>
             });
 
             // --- 5. Function to trigger the printer from the iframe ---
@@ -579,5 +581,6 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                 iframe.contentWindow.print();
             }
         </script>
-    @endpush
-@endsection
+    <?php $__env->stopPush(); ?>
+<?php $__env->stopSection(); ?>
+<?php echo $__env->make('layouts.manager', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH C:\xampp\htdocs\agile_accounts\agile_accounts\resources\views/loan-manager/dashboard.blade.php ENDPATH**/ ?>

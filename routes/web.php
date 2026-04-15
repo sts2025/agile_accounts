@@ -29,6 +29,7 @@ use App\Http\Controllers\LoanManager\ProfileController;
 use App\Http\Controllers\LoanManager\CashTransactionController;
 use App\Http\Controllers\LoanManager\BusinessSettingsController;
 use App\Http\Controllers\LoanManager\StaffController;
+use App\Http\Controllers\LoanManager\MfiUpgradeController; // <-- ADDED: MFI Upgrade Controller
 
 // Explicitly bind {manager} to the User model
 Route::model('manager', User::class);
@@ -86,6 +87,9 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['subscription'])->group(function () {
 
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+        // --- ADDED: MFI Upgrade Route ---
+        Route::post('/upgrade-to-mfi', [MfiUpgradeController::class, 'upgradeToMfi'])->name('mfi.upgrade');
 
         // User Profile
         Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
