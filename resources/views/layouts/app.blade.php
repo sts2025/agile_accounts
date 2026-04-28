@@ -1,342 +1,265 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="description" content="Loan Management System by STREAMLINE TECH SOLUTION">
-    
-    <base href="{{ url('/') }}/">
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>@yield('title', 'Agile Accounts')</title>
-
-    {{-- Fonts --}}
-    <link href="{{ asset('vendor/fontawesome-free/css/all.min.css') }}" rel="stylesheet" type="text/css">
-    <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
-
-    {{-- Styles --}}
-    <link href="{{ asset('css/sb-admin-2.min.css') }}" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/startbootstrap-sb-admin-2/4.1.4/css/sb-admin-2.min.css" rel="stylesheet" onerror="this.remove()">
-
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* === EXTREME CSS GUARDRAIL === */
-        /* Forces any backdrop element to be invisible, tiny, and unclickable */
-        .modal-backdrop, .fade.show, .sidebar-backdrop {
-            display: none !important;
-            visibility: hidden !important;
-            opacity: 0 !important;
-            width: 0 !important;
-            height: 0 !important;
-            pointer-events: none !important;
-            position: absolute !important;
-            z-index: -9999 !important;
-        }
+        body { display: flex; background-color: #f4f7f6; }
+        .sidebar { width: 280px; min-height: 100vh; background-color: #2c3e50; color: white; padding: 20px; position: fixed; top: 0; left: 0; overflow-y: auto; z-index: 1000; }
+        .sidebar .logo { text-align: center; margin-bottom: 30px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; }
+        .sidebar .nav-link { color: #e1e8ec; padding: 10px 15px; border-radius: 5px; margin-bottom: 5px; transition: all 0.2s; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { background-color: #34495e; color: white; }
         
-        /* Force body to be scrollable and clickable */
-        body, html, #wrapper, #content-wrapper {
-            overflow: auto !important;
-            height: auto !important;
-            padding-right: 0 !important;
-            pointer-events: auto !important;
-        }
+        .sidebar .nav-link[data-bs-toggle="collapse"]::after { content: ' ▸'; float: right; transition: transform 0.2s; }
+        .sidebar .nav-link[data-bs-toggle="collapse"][aria-expanded="true"]::after { content: ' ▾'; transform: rotate(0deg); }
         
-        body.modal-open {
-            overflow: auto !important;
+        .sidebar .collapse .nav-link { font-size: 0.9em; padding-left: 20px; background-color: rgba(0,0,0,0.1); }
+        
+        .main-content { margin-left: 280px; padding: 30px; width: calc(100% - 280px); display: flex; flex-direction: column; min-height: 100vh; position: relative; }
+        .main-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #dee2e6; }
+        .top-menu { display: flex; align-items: center; gap: 15px; }
+        
+        .app-footer { padding-top: 20px; text-align: center; border-top: 1px solid #ddd; margin-top: auto; font-size: 0.85rem; color: #6c757d; padding-bottom: 10px; }
+        .sidebar-sub-header { font-size: 0.7rem; text-transform: uppercase; color: #8fa0b1; margin: 15px 0 5px 15px; font-weight: bold; letter-spacing: 1px; }
+        .submenu-header { font-size: 0.75rem; text-transform: uppercase; color: #8fa0b1; margin: 10px 0 5px 20px; font-weight: bold; }
+
+        /* BACKDROP KILLER - STRONG CSS OVERRIDE */
+        .modal-backdrop { 
+            display: none !important; 
+            visibility: hidden !important; 
+            opacity: 0 !important; 
+            pointer-events: none !important; 
+            z-index: -1 !important;
+        }
+        body.modal-open { 
+            overflow: auto !important; 
+            padding-right: 0 !important; 
         }
     </style>
-
     @stack('styles')
 </head>
-
-<body id="page-top">
-
-    <div id="wrapper">
-
-        {{-- ================= SIDEBAR ================= --}}
-        <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
-
-            {{-- Brand --}}
-            <a class="sidebar-brand d-flex align-items-center justify-content-center" href="{{ route('dashboard') }}">
-                <div class="sidebar-brand-icon">
-                    <i class="fas fa-landmark"></i>
-                </div>
-                <div class="sidebar-brand-text mx-3">Agile Accounts</div>
+<body>
+    <div class="sidebar shadow">
+        <div class="logo">
+            <a href="{{ route('dashboard') }}" class="text-decoration-none">
+                {{-- SIDEBAR BRANDING --}}
+                <h4 class="text-white mb-0 fw-bold">
+                    {{ optional(Auth::user()->getCompany())->company_name ?? 'Agile Accounts' }}
+                </h4>
+                <small class="text-info" style="font-size: 0.7rem; letter-spacing: 1px;">MANAGEMENT PORTAL</small>
             </a>
+        </div>
 
-            <hr class="sidebar-divider my-0">
+        <ul class="nav flex-column">
+            <li class="nav-item"> 
+                <a class="nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}"> 
+                    <i class="bi bi-grid-fill me-2"></i> Dashboard 
+                </a> 
+            </li>
 
-            @if(request()->is('admin*'))
-                
-                {{-- >>> ADMIN SIDEBAR <<< --}}
-                <li class="nav-item {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">
-                    <a class="nav-link" href="{{ route('admin.dashboard') }}">
-                        <i class="fas fa-fw fa-tachometer-alt"></i>
-                        <span>Admin Dashboard</span>
-                    </a>
-                </li>
+            <li class="nav-item"> 
+                <a class="nav-link {{ request()->routeIs('payments.*') ? 'active' : '' }}" href="{{ route('payments.index') }}" style="background-color: #3498db; color: white; margin-bottom: 15px;"> 
+                    <i class="bi bi-cash-stack me-2"></i> All Payments 
+                </a> 
+            </li>
 
-                <div class="sidebar-heading mt-3">Administration</div>
+            <div class="sidebar-sub-header">Operations</div>
 
-                <li class="nav-item {{ request()->routeIs('admin.managers.*') ? 'active' : '' }}">
-                    <a class="nav-link" href="{{ route('admin.dashboard') }}">
-                        <i class="fas fa-fw fa-users-cog"></i>
-                        <span>Manage Managers</span>
-                    </a>
-                </li>
+            {{-- CLIENTS --}}
+            <li class="nav-item">
+                <a class="nav-link collapsed" href="#clients-submenu" data-bs-toggle="collapse"> 
+                    <i class="bi bi-people-fill me-2"></i> Clients 
+                </a>
+                <div class="collapse {{ request()->routeIs('clients.*') ? 'show' : '' }}" id="clients-submenu">
+                    <ul class="nav flex-column ms-2">
+                        <div class="submenu-header">Actions</div>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('clients.index') && !request()->has('filter') ? 'active' : '' }}" href="{{ route('clients.index') }}">List Clients</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('clients.create') ? 'active' : '' }}" href="{{ route('clients.create') }}">Add New Client</a></li>
+                        
+                        <div class="submenu-header">Filters</div>
+                        <li class="nav-item"><a class="nav-link {{ request()->input('filter') == 'not_paid' ? 'active' : '' }}" href="{{ route('clients.index', ['filter' => 'not_paid']) }}">Not Paid</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->input('filter') == 'with_loans' ? 'active' : '' }}" href="{{ route('clients.index', ['filter' => 'with_loans']) }}">With Loans</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->input('filter') == 'no_loans' ? 'active' : '' }}" href="{{ route('clients.index', ['filter' => 'no_loans']) }}">Without Loans</a></li>
+                    </ul>
+                </div>
+            </li>
+            
+            {{-- LOANS --}}
+            <li class="nav-item"> 
+                <a class="nav-link collapsed" href="#loans-submenu" data-bs-toggle="collapse"> 
+                    <i class="bi bi-journal-text me-2"></i> Loans 
+                </a> 
+                <div class="collapse {{ request()->routeIs('loans.*') ? 'show' : '' }}" id="loans-submenu">
+                    <ul class="nav flex-column ms-2">
+                        <div class="submenu-header">Actions</div>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('loans.index') && !request()->has('filter') ? 'active' : '' }}" href="{{ route('loans.index') }}">All Loans</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('loans.create') ? 'active' : '' }}" href="{{ route('loans.create') }}">Create Loan</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('loans.index', ['filter' => 'completed']) ? 'active' : '' }}" href="{{ route('loans.index', ['filter' => 'completed']) }}">Completed Loans</a></li>
+                        
+                        <div class="submenu-header">Tools</div>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('loans.showCalculator') ? 'active' : '' }}" href="{{ route('loans.showCalculator') }}">Loan Calculator</a></li>
+                    </ul>
+                </div>
+            </li>
 
-                <li class="nav-item {{ request()->routeIs('admin.broadcasts.*') ? 'active' : '' }}">
-                    <a class="nav-link" href="{{ route('admin.broadcasts.index') }}">
-                        <i class="fas fa-fw fa-bullhorn"></i>
-                        <span>Broadcasts</span>
-                    </a>
-                </li>
+            {{-- ============================================== --}}
+            {{-- MICROFINANCE HUB (FORCED VISIBLE) --}}
+            {{-- ============================================== --}}
+            <div class="sidebar-sub-header" style="color: #f1c40f;"><i class="fas fa-crown me-1"></i> Microfinance Hub</div>
+            <li class="nav-item">
+                <a class="nav-link collapsed" href="#mfi-submenu" data-bs-toggle="collapse" style="color: #f1c40f;"> 
+                    <i class="fas fa-piggy-bank me-2"></i> Savings Accounts 
+                </a>
+                <div class="collapse {{ request()->routeIs('mfi.savings.*') ? 'show' : '' }}" id="mfi-submenu">
+                    <ul class="nav flex-column ms-2">
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.savings.index') ? 'active' : '' }}" href="{{ route('mfi.savings.index') }}">All Accounts</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.savings.create') ? 'active' : '' }}" href="{{ route('mfi.savings.create') }}">Open New Account</a></li>
+                    </ul>
+                </div>
+            </li>
+            {{-- ============================================== --}}
+            
+            {{-- REPORTS --}}
+            <li class="nav-item">
+                <a class="nav-link collapsed" href="#reports-submenu" data-bs-toggle="collapse"> 
+                    <i class="bi bi-bar-chart-fill me-2"></i> Reports 
+                </a>
+                <div class="collapse {{ request()->routeIs('reports.*') ? 'show' : '' }}" id="reports-submenu">
+                    <ul class="nav flex-column ms-2">
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.daily') ? 'active' : '' }}" href="{{ route('reports.daily') }}">Daily Report</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.general-ledger') ? 'active' : '' }}" href="{{ route('reports.general-ledger') }}">General Ledger</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.trial-balance') ? 'active' : '' }}" href="{{ route('reports.trial-balance') }}">Trial Balance</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.profit-and-loss') ? 'active' : '' }}" href="{{ route('reports.profit-and-loss') }}">P&L Statement</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.balance-sheet') ? 'active' : '' }}" href="{{ route('reports.balance-sheet') }}">Balance Sheet</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.loan-aging') ? 'active' : '' }}" href="{{ route('reports.loan-aging') }}">Loan Aging Report</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.print-forms') ? 'active' : '' }}" href="{{ route('reports.print-forms') }}">Print Forms</a></li>
+                    </ul>
+                </div>
+            </li>
+            
+            {{-- TRANSACTIONS --}}
+            <li class="nav-item">
+                <a class="nav-link collapsed" href="#transactions-submenu" data-bs-toggle="collapse"> 
+                    <i class="bi bi-arrow-down-up me-2"></i> Transactions 
+                </a>
+                <div class="collapse {{ request()->routeIs(['bank-transactions.*', 'expenses.*', 'cash-transactions.*']) ? 'show' : '' }}" id="transactions-submenu">
+                    <ul class="nav flex-column ms-2">
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('bank-transactions.index') ? 'active' : '' }}" href="{{ route('bank-transactions.index') }}">
+                            <i class="fas fa-university me-2"></i> Bank Deposits
+                        </a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('expenses.index') ? 'active' : '' }}" href="{{ route('expenses.index') }}">
+                            <i class="fas fa-file-invoice me-2"></i> Expenses
+                        </a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('cash-transactions.index') ? 'active' : '' }}" href="{{ route('cash-transactions.index') }}">
+                            <i class="fas fa-hand-holding-usd me-2"></i> Cash Flow
+                        </a></li>
+                    </ul>
+                </div>
+            </li>
 
-                <hr class="sidebar-divider">
+            <div class="sidebar-sub-header">Administration</div>
+            
+            <li class="nav-item">
+                <a class="nav-link {{ request()->routeIs('manager.staff.*') ? 'active' : '' }}" href="{{ route('manager.staff.index') }}">
+                    <i class="bi bi-person-badge-fill me-2"></i> Manage Staff
+                </a>
+            </li>
 
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ route('dashboard') }}">
-                        <i class="fas fa-fw fa-arrow-left"></i>
-                        <span>Exit Admin Panel</span>
-                    </a>
-                </li>
-
-            @else
-
-                {{-- >>> LOAN MANAGER SIDEBAR <<< --}}
-
-                <li class="nav-item {{ request()->routeIs('dashboard') ? 'active' : '' }}">
-                    <a class="nav-link" href="{{ route('dashboard') }}">
-                        <i class="fas fa-fw fa-tachometer-alt"></i>
-                        <span>Dashboard</span>
-                    </a>
-                </li>
-
-                <li class="nav-item {{ request()->routeIs('payments.*') ? 'active' : '' }}">
-                    <a class="nav-link" href="{{ route('payments.index') }}">
-                        <i class="fas fa-fw fa-money-bill-wave"></i>
-                        <span>All Payments</span>
-                    </a>
-                </li>
-
-                @if(auth()->id() === 1 || session()->has('original_admin_id'))
-                <li class="nav-item">
-                    <a class="nav-link bg-danger text-white font-weight-bold" href="{{ route('admin.dashboard') }}">
-                        <i class="fas fa-fw fa-user-shield text-white"></i>
-                        <span>Go to Admin Panel</span>
-                    </a>
-                </li>
-                @endif
-
-                <hr class="sidebar-divider">
-
-                <div class="sidebar-heading">Core</div>
-
-                {{-- Client Management --}}
-                <li class="nav-item {{ request()->routeIs('clients.*') ? 'active' : '' }}">
-                    <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseClients" aria-expanded="true">
-                        <i class="fas fa-fw fa-users"></i>
-                        <span>Clients</span>
-                    </a>
-                    <div id="collapseClients" class="collapse {{ request()->routeIs('clients.*') ? 'show' : '' }}" data-parent="#accordionSidebar">
-                        <div class="bg-white py-2 collapse-inner rounded">
-                            <a class="collapse-item" href="{{ route('clients.index') }}">All Clients</a>
-                            <a class="collapse-item" href="{{ route('clients.create') }}">Add Client</a>
-                        </div>
-                    </div>
-                </li>
-
-                {{-- Loan Management --}}
-                <li class="nav-item {{ request()->routeIs('loans.*') ? 'active' : '' }}">
-                    <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseLoans" aria-expanded="true">
-                        <i class="fas fa-fw fa-hand-holding-usd"></i>
-                        <span>Loans</span>
-                    </a>
-                    <div id="collapseLoans" class="collapse {{ request()->routeIs('loans.*') ? 'show' : '' }}" data-parent="#accordionSidebar">
-                        <div class="bg-white py-2 collapse-inner rounded">
-                            <a class="collapse-item" href="{{ route('loans.index') }}">Active Loans</a>
-                            <a class="collapse-item" href="{{ route('loans.create') }}">New Loan</a>
-                            <a class="collapse-item" href="{{ route('loans.index', ['filter' => 'completed']) }}">Completed</a>
-                            <a class="collapse-item" href="{{ route('loans.showCalculator') }}">Calculator</a>
-                        </div>
-                    </div>
-                </li>
-
-                <div class="sidebar-heading mt-2">Finance</div>
-
-                {{-- Transactions --}}
-                <li class="nav-item {{ request()->is('*-transactions*') || request()->is('expenses*') ? 'active' : '' }}">
-                    <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseTx" aria-expanded="true">
-                        <i class="fas fa-fw fa-exchange-alt"></i>
-                        <span>Transactions</span>
-                    </a>
-                    <div id="collapseTx" class="collapse {{ request()->is('*-transactions*') || request()->is('expenses*') ? 'show' : '' }}" data-parent="#accordionSidebar">
-                        <div class="bg-white py-2 collapse-inner rounded">
-                            <a class="collapse-item" href="{{ route('bank-transactions.index') }}">Banking</a>
-                            <a class="collapse-item" href="{{ route('expenses.index') }}">Expenses</a>
-                            <a class="collapse-item" href="{{ route('cash-transactions.index') }}">Payable/Receivable</a>
-                        </div>
-                    </div>
-                </li>
-
-                {{-- Reports --}}
-                <li class="nav-item {{ request()->is('reports*') ? 'active' : '' }}">
-                    <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseReports" aria-expanded="true">
-                        <i class="fas fa-fw fa-chart-line"></i>
-                        <span>Reports</span>
-                    </a>
-                    <div id="collapseReports" class="collapse {{ request()->is('reports*') ? 'show' : '' }}" data-parent="#accordionSidebar">
-                        <div class="bg-white py-2 collapse-inner rounded">
-                            <a class="collapse-item" href="{{ route('reports.daily') }}">Daily Report</a>
-                            <a class="collapse-item" href="{{ route('reports.profit-and-loss') }}">Profit & Loss</a>
-                            <a class="collapse-item" href="{{ route('reports.balance-sheet') }}">Balance Sheet</a>
-                            <a class="collapse-item" href="{{ route('reports.trial-balance') }}">Trial Balance</a>
-                            <a class="collapse-item" href="{{ route('reports.general-ledger') }}">General Ledger</a>
-                        </div>
-                    </div>
-                </li>
-
-                <hr class="sidebar-divider">
-                <div class="sidebar-heading">Settings</div>
-
-                <li class="nav-item {{ request()->routeIs('profile.edit') ? 'active' : '' }}">
-                    <a class="nav-link" href="{{ route('profile.edit') }}">
-                        <i class="fas fa-fw fa-cogs"></i>
-                        <span>Business Settings</span>
-                    </a>
-                </li>
-
-            @endif
-
-            <hr class="sidebar-divider d-none d-md-block">
-
-            <div class="text-center d-none d-md-inline">
-                <button class="rounded-circle border-0" id="sidebarToggle"></button>
-            </div>
+            <li class="nav-item">
+                <a class="nav-link {{ request()->routeIs('manager.settings.*') ? 'active' : '' }}" href="{{ route('manager.settings.edit') }}">
+                    <i class="bi bi-gear-wide-connected me-2"></i> Business Settings
+                </a>
+            </li>
 
         </ul>
+    </div>
 
-
-        <div id="content-wrapper" class="d-flex flex-column">
-            <div id="content">
-
-                {{-- TOPBAR --}}
-                <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
-                    <button id="sidebarToggleTop" class="btn btn-link d-md-none rounded-circle mr-3">
-                        <i class="fa fa-bars"></i>
-                    </button>
-
-                    <h5 class="m-0 font-weight-bold text-primary ml-2 d-none d-sm-block">
-                        @if(request()->is('admin*'))
-                            <span class="badge badge-danger px-2">ADMIN PANEL</span>
-                        @endif
-                    </h5>
-
-                    <ul class="navbar-nav ml-auto">
-                        @if (Session::has('original_admin_id'))
-                            <li class="nav-item">
-                                <a class="nav-link text-danger font-weight-bold" href="{{ route('admin.users.stop_impersonate') }}">
-                                    <i class="fas fa-user-secret mr-2"></i> Stop Login As
-                                </a>
-                            </li>
-                        @endif
-
-                        <div class="topbar-divider d-none d-sm-block"></div>
-
-                        <li class="nav-item dropdown no-arrow">
-                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-toggle="dropdown">
-                                <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ Auth::user()->name }}</span>
-                                <i class="fas fa-user-circle fa-2x"></i>
-                            </a>
-                            <div class="dropdown-menu dropdown-menu-right shadow animated--grow-in">
-                                <a class="dropdown-item" href="{{ route('profile.edit') }}">
-                                    <i class="fas fa-user fa-sm fa-fw mr-2 text-gray-400"></i> Profile Settings
-                                </a>
-                                <div class="dropdown-divider"></div>
-                                <a class="dropdown-item" href="#" data-toggle="modal" data-target="#logoutModal">
-                                    <i class="fas fa-sign-out-alt fa-sm fa-fw mr-2 text-gray-400"></i> Logout
-                                </a>
-                            </div>
-                        </li>
-                    </ul>
-                </nav>
-
-                <div class="container-fluid">
-                    @yield('content')
-                </div>
-
-            </div>
+    <div class="main-content">
+        <div class="main-header bg-white px-3 rounded shadow-sm">
+            {{-- HEADER: Company Name --}}
+            <h5 class="mb-0 text-dark fw-bold text-uppercase">
+                {{ optional(Auth::user()->getCompany())->company_name ?? 'Agile Accounts' }}
+            </h5>
             
-            <footer class="sticky-footer bg-white">
-                <div class="container my-auto">
-                    <div class="copyright text-center my-auto">
-                        <span>Developed by <strong>BKR TECH</strong> &copy; {{ date('Y') }}</span>
+            <div class="top-menu">
+                <div class="d-flex align-items-center">
+                    <div class="text-end me-3 d-none d-md-block">
+                        <div class="fw-bold small text-dark">{{ Auth::user()->name }}</div>
+                        <div class="text-muted" style="font-size: 0.75rem;">
+                            {{ Auth::user()->role == 'cashier' ? 'Cashier' : 'Loan Manager' }}
+                        </div>
+                    </div>
+                    
+                    <div class="dropdown">
+                        <button class="btn btn-light btn-sm rounded-circle shadow-sm" type="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle fs-5"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                            <li><a class="dropdown-item" href="{{ route('profile.edit') }}"><i class="bi bi-person me-2"></i> Profile</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form method="POST" action="{{ route('logout') }}">
+                                    @csrf
+                                    <button type="submit" class="dropdown-item text-danger fw-bold"><i class="bi bi-box-arrow-right me-2"></i> Logout</button>
+                                </form>
+                            </li>
+                        </ul>
                     </div>
                 </div>
-            </footer>
-        </div>
-    </div>
-
-    {{-- Logout Modal --}}
-    <div class="modal fade" id="logoutModal" tabindex="-1" role="dialog">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Ready to Leave?</h5>
-                    <button class="close" type="button" data-dismiss="modal"><span>×</span></button>
-                </div>
-                <div class="modal-body">Select "Logout" below if you are ready to end your current session.</div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
-                    <form method="POST" action="{{ route('logout') }}">
-                        @csrf
-                        <button type="submit" class="btn btn-primary">Logout</button>
-                    </form>
-                </div>
             </div>
         </div>
+        
+        <div class="content-wrapper">
+            @yield('content')
+        </div>
+
+        <footer class="app-footer">
+            Developed by <strong>STREAMLINE TECH SOLUTION</strong> &copy; {{ date('Y') }} | 
+            Support: <a href="tel:{{ \App\Models\LoanManager::getGlobalSupportPhone() }}" class="fw-bold text-decoration-none">
+                {{ \App\Models\LoanManager::getGlobalSupportPhone() }}
+            </a>
+        </footer>
     </div>
-    
+
     @stack('modals')
-
-    <script src="{{ asset('vendor/jquery/jquery.min.js') }}"></script>
-    <script src="{{ asset('vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
-    <script src="{{ asset('vendor/jquery-easing/jquery.easing.min.js') }}"></script>
-    <script src="{{ asset('js/sb-admin-2.min.js') }}"></script>
-
-    <script>
-        /* === PERMANENT BACKDROP KILLER (Turbo Mode) === */
-        function forceUnlockScreen() {
-            // 1. Remove ANY element with 'backdrop' in its class name
-            const backdrops = document.querySelectorAll('[class*="backdrop"]');
-            if (backdrops.length > 0) {
-                backdrops.forEach(b => b.remove());
-            }
-
-            // 2. Unlock the body classes
-            if (document.body.classList.contains('modal-open')) {
-                document.body.classList.remove('modal-open');
-            }
-            
-            // 3. Force CSS properties to ensure clickability
-            document.body.style.overflow = 'auto';
-            document.body.style.paddingRight = '0px';
-            document.body.style.pointerEvents = 'auto';
-        }
-
-        // Run immediately on DOM load
-        document.addEventListener("DOMContentLoaded", forceUnlockScreen);
-        
-        // Run on window load
-        window.onload = forceUnlockScreen;
-        
-        // Run aggressively every 100ms forever to catch late script injections
-        setInterval(forceUnlockScreen, 100);
-
-        // Run on every click to ensure UI stays unlocked
-        document.addEventListener('click', forceUnlockScreen);
-    </script>
     @stack('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    {{-- ADVANCED BACKDROP KILLER --}}
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            // Function to remove stuck backdrops
+            function removeBackdrop() {
+                document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = 'auto';
+                document.body.style.paddingRight = '0px';
+            }
+
+            // 1. Initial Cleanup
+            removeBackdrop();
+
+            // 2. MutationObserver: Watch for the backdrop element and destroy it instantly
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    mutation.addedNodes.forEach((node) => {
+                        if (node.nodeType === 1 && node.classList.contains('modal-backdrop')) {
+                            node.remove();
+                            document.body.classList.remove('modal-open');
+                            document.body.style.overflow = 'auto';
+                        }
+                    });
+                });
+            });
+
+            // Start observing the body for added nodes
+            observer.observe(document.body, { childList: true, subtree: true });
+        });
+    </script>
 </body>
 </html>

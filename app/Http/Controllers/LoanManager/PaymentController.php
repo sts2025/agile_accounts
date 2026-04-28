@@ -5,6 +5,8 @@ namespace App\Http\Controllers\LoanManager;
 use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\Loan;
+use App\Models\Account;
+use App\Models\GeneralLedgerTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -27,7 +29,6 @@ class PaymentController extends Controller
 
     public function store(Request $request)
     {
-        // 1. CORRECT VALIDATION: Only put Laravel rules in here
         $validated = $request->validate([
             'loan_id'        => 'required|exists:loans,id',
             'principal_paid' => 'required|numeric|min:0',
@@ -46,11 +47,8 @@ class PaymentController extends Controller
         }
 
         try {
-            // Assign the DB transaction to the $payment variable
             $payment = DB::transaction(function () use ($validated, $totalAmount) {
                 
-                // 2. LOGIC FIX: Map the reference_id to receipt_number
-                // If they typed something, use it. If not, auto-generate it.
                 $receiptNumber = !empty($validated['reference_id']) 
                                     ? $validated['reference_id'] 
                                     : 'RCP-' . time() . rand(10, 99);
@@ -62,13 +60,12 @@ class PaymentController extends Controller
                     'principal_paid' => $validated['principal_paid'],
                     'interest_paid'  => $validated['interest_paid'],
                     'payment_method' => $validated['payment_method'],
-                    // Note: We DO NOT pass 'reference_id' here so it doesn't crash the database!
                     'receipt_number' => $receiptNumber,
                     'notes'          => $validated['notes'] ?? null,
                 ]);
 
-                // Check if loan is fully paid
-                $loan = Loan::find($validated['loan_id']);
+                // Update Loan Status
+                $loan = Loan::with('client')->find($validated['loan_id']);
                 $totalDue = $loan->principal_amount + ($loan->principal_amount * ($loan->interest_rate / 100));
                 $paidSoFar = $loan->payments()->sum('amount_paid');
                 
@@ -76,10 +73,50 @@ class PaymentController extends Controller
                     $loan->update(['status' => 'paid']);
                 }
 
-                return $newPayment; // Important: Return the newly created payment
+                // --- NEW FIX: RECORD IN GENERAL LEDGER ---
+                $cashAccount = Account::where('name', 'Cash on Hand')->first();
+                $loanReceivableAccount = Account::where('name', 'Loans Receivable')->first();
+                $interestIncomeAccount = Account::where('name', 'Interest Income')->first();
+
+                if ($cashAccount) {
+                    // 1. Debit Cash (The full 70k hits Cash Flow)
+                    GeneralLedgerTransaction::create([
+                        'account_id' => $cashAccount->id,
+                        'loan_id' => $loan->id,
+                        'transaction_date' => $validated['payment_date'],
+                        'description' => 'Loan Repayment from ' . ($loan->client->name ?? 'Client') . ' (Receipt: ' . $receiptNumber . ')',
+                        'debit' => $totalAmount,
+                        'credit' => 0
+                    ]);
+
+                    // 2. Credit Loans Receivable (Only the 40k Principal)
+                    if ($loanReceivableAccount && $validated['principal_paid'] > 0) {
+                        GeneralLedgerTransaction::create([
+                            'account_id' => $loanReceivableAccount->id,
+                            'loan_id' => $loan->id,
+                            'transaction_date' => $validated['payment_date'],
+                            'description' => 'Principal Repayment from ' . ($loan->client->name ?? 'Client'),
+                            'debit' => 0,
+                            'credit' => $validated['principal_paid']
+                        ]);
+                    }
+
+                    // 3. Credit Interest Income (Only the 30k Interest hits Profit)
+                    if ($interestIncomeAccount && $validated['interest_paid'] > 0) {
+                        GeneralLedgerTransaction::create([
+                            'account_id' => $interestIncomeAccount->id,
+                            'loan_id' => $loan->id,
+                            'transaction_date' => $validated['payment_date'],
+                            'description' => 'Interest Payment from ' . ($loan->client->name ?? 'Client'),
+                            'debit' => 0,
+                            'credit' => $validated['interest_paid']
+                        ]);
+                    }
+                }
+
+                return $newPayment; 
             });
 
-            // Redirect directly to the thermal receipt!
             return redirect()->route('payments.receipt', $payment->id)
                              ->with('success', 'Payment recorded successfully!');
                              

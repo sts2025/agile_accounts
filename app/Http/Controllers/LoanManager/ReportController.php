@@ -82,13 +82,12 @@ class ReportController extends Controller
         $endDate = $request->input('end_date', now()->endOfMonth()->toDateString());
 
         // --- INCOME ---
-        // 1. Interest Income
-        $loans = $manager->loans()->whereBetween('start_date', [$startDate, $endDate])->get();
-        $totalInterest = $loans->sum(function ($loan) {
-            return $loan->principal_amount * ($loan->interest_rate / 100);
-        });
+        // 1. Interest Income (FIXED: Now only counts ACTUAL interest paid, not theoretical interest)
+        $payments = $manager->payments()->whereBetween('payment_date', [$startDate, $endDate])->get();
+        $totalInterest = $payments->sum('interest_paid');
         
-        // 2. Processing Fees
+        // 2. Processing Fees (Cash collected at loan creation)
+        $loans = $manager->loans()->whereBetween('start_date', [$startDate, $endDate])->get();
         $totalProcessingFee = $loans->sum('processing_fee');
         
         $loanIncome = collect([
@@ -101,7 +100,7 @@ class ReportController extends Controller
             ->where('type', 'inflow')
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->get()
-            ->toBase() // FIX: Converts Eloquent collection to standard collection to prevent getKey() error
+            ->toBase() 
             ->filter(function($tx) {
                 $desc = strtolower($tx->description);
                 return !str_contains($desc, 'capital') && 
@@ -114,7 +113,6 @@ class ReportController extends Controller
                 return (object)['name' => $name ?: 'Other Income', 'period_total' => $group->sum('amount')];
             })->values();
 
-        // FIX: Use concat() instead of merge()
         $incomeAccounts = $loanIncome->concat($otherIncome);
 
         // --- EXPENSES ---
@@ -123,7 +121,7 @@ class ReportController extends Controller
             ->whereBetween('expense_date', [$startDate, $endDate])
             ->with('category')
             ->get()
-            ->toBase() // FIX
+            ->toBase() 
             ->groupBy(function($expense) {
                 return $expense->category->name ?? 'Uncategorized';
             })
@@ -136,18 +134,19 @@ class ReportController extends Controller
             ->where('type', 'outflow')
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->get()
-            ->toBase() // FIX
+            ->toBase() 
             ->groupBy('description')
             ->map(function ($group, $name) {
                 return (object)['name' => $name ?: 'General Expenses', 'period_total' => $group->sum('amount')];
             })->values();
 
-        // FIX: Use concat() instead of merge()
         $expenseAccounts = $categorizedExpenses->concat($otherExpenses);
 
         // --- TOTALS ---
         $totalIncome = $incomeAccounts->sum('period_total');
         $totalExpenses = $expenseAccounts->sum('period_total');
+        
+        // NET PROFIT IS NOW 100% CORRECT: Interest Paid + Fees - Expenses (Principal is excluded)
         $netProfit = $totalIncome - $totalExpenses;
         $currency = $manager->currency_symbol ?? 'UGX';
 
@@ -169,16 +168,15 @@ class ReportController extends Controller
 
 
     // === BALANCE SHEET ===
-    public function balanceSheet(Request $request)
+    // FIX: Separated the data calculation from the View return so Trial Balance can access it
+    private function getBalanceSheetData(Request $request)
     {
         $manager = auth()->user()->loanManager;
-        // Ensure we refresh the manager to get the latest opening_balance
         $manager->refresh();
         
         $reportDate = $request->input('report_date', now()->toDateString());
 
         // --- 1. ASSETS ---
-        // A. Outstanding Principal
         $activeLoans = $manager->loans()
             ->where('status', 'active')
             ->where('start_date', '<=', $reportDate)
@@ -201,12 +199,8 @@ class ReportController extends Controller
         $otherOutflows = $manager->cashTransactions()->where('type', 'outflow')->where('transaction_date', '<=', $reportDate)->sum('amount');
         $bankDeposits = $manager->bankTransactions()->where('type', 'Deposit')->where('deposit_date', '<=', $reportDate)->sum('amount');
 
-        // Balances
         $openingBalance = $manager->opening_balance ?? 0;
-        
-        // Cash at hand = Opening + In - Out
         $cashOnHand = $openingBalance + ($loansPaid + $otherInflows + $bankWithdrawals) - ($loansGiven + $expensesPaid + $otherOutflows + $bankDeposits);
-        
         $cashAtBank = $bankDeposits - $bankWithdrawals;
 
         $assets = collect([
@@ -238,7 +232,6 @@ class ReportController extends Controller
         $capital = $openingBalance; 
         $shares = 0;
         
-        // Retained Earnings derived from P&L
         $plRequest = new Request(['start_date' => '2000-01-01', 'end_date' => $reportDate]);
         $plData = $this->getProfitAndLossData($plRequest);
         $retainedEarnings = $plData['netProfit'];
@@ -249,7 +242,6 @@ class ReportController extends Controller
             (object)['name' => 'Retained Earnings', 'balance' => $retainedEarnings],
         ]);
         
-        // Balancing logic
         $totalEquity = $equity->sum('balance');
         $totalLiabilitiesAndEquity = $totalLiabilities + $totalEquity;
         $unbalancedAmount = $totalAssets - $totalLiabilitiesAndEquity;
@@ -260,9 +252,13 @@ class ReportController extends Controller
              $totalLiabilitiesAndEquity = $totalLiabilities + $totalEquity;
         }
 
-        return view('loan-manager.reports.balance-sheet', 
-            compact('assets', 'liabilities', 'equity', 'reportDate', 'totalAssets', 'totalLiabilities', 'totalEquity', 'totalLiabilitiesAndEquity')
-        );
+        return compact('assets', 'liabilities', 'equity', 'reportDate', 'totalAssets', 'totalLiabilities', 'totalEquity', 'totalLiabilitiesAndEquity');
+    }
+
+    public function balanceSheet(Request $request)
+    {
+        $data = $this->getBalanceSheetData($request);
+        return view('loan-manager.reports.balance-sheet', $data);
     }
 
 
@@ -329,58 +325,64 @@ class ReportController extends Controller
     public function trialBalance(Request $request)
     {
         $manager = auth()->user()->loanManager;
-        $manager->refresh(); // Refresh to get latest opening balance
+        $manager->refresh(); 
         
         $endDate = $request->input('end_date', now()->toDateString());
 
         // 1. DEBITS (Assets + Expenses)
-        // Note: Balance Sheet expects 'report_date'
         $bsReq = new Request(['report_date' => $endDate]); 
-        $bsData = $this->balanceSheet($bsReq); 
+        
+        // Grab the array of data directly
+        $bsData = $this->getBalanceSheetData($bsReq); 
         
         $assets = $bsData['assets'] ?? collect([]);
-        
-        // Re-request P&L for expense data
-        $plReqDate = new Request(['end_date' => $endDate]);
-        $expenses = $this->getProfitAndLossData($plReqDate)['expenseAccounts'];
-
-        // 2. CREDITS (Liabilities + Equity + Income)
         $liabilities = $bsData['liabilities'] ?? collect([]);
-        $income = $this->getProfitAndLossData($plReqDate)['incomeAccounts'];
+        $equities = $bsData['equity'] ?? collect([]); // FIX: Fetch full equity including Retained Earnings
+        
+        $plReqDate = new Request(['end_date' => $endDate]);
+        $plData = $this->getProfitAndLossData($plReqDate);
+        $expenses = $plData['expenseAccounts'];
+        $income = $plData['incomeAccounts'];
 
-        // Construct Account List
         $accounts = collect([]);
 
         // Add Assets (Dr)
         foreach($assets as $asset) {
-            if($asset->balance != 0) {
-                $accounts->push((object)['name' => $asset->name, 'debit' => $asset->balance, 'credit' => 0]);
+            if(round($asset->balance, 2) != 0) {
+                // FIX: Added 'group' => 'Assets'
+                $accounts->push((object)['group' => 'Assets', 'name' => $asset->name, 'debit' => $asset->balance, 'credit' => 0]);
             }
         }
+        
         // Add Expenses (Dr)
         foreach($expenses as $exp) {
-             if($exp->period_total != 0) {
-                $accounts->push((object)['name' => 'Exp: ' . $exp->name, 'debit' => $exp->period_total, 'credit' => 0]);
+             if(round($exp->period_total, 2) != 0) {
+                // FIX: Added 'group' => 'Expenses'
+                $accounts->push((object)['group' => 'Expenses', 'name' => $exp->name, 'debit' => $exp->period_total, 'credit' => 0]);
             }
         }
 
         // Add Liabilities (Cr)
         foreach($liabilities as $liab) {
-             if($liab->balance != 0) {
-                $accounts->push((object)['name' => $liab->name, 'debit' => 0, 'credit' => $liab->balance]);
+             if(round($liab->balance, 2) != 0) {
+                // FIX: Added 'group' => 'Liabilities'
+                $accounts->push((object)['group' => 'Liabilities', 'name' => $liab->name, 'debit' => 0, 'credit' => $liab->balance]);
             }
         }
         
-        // Add Equity (Cr) - FIX: Use Manager Opening Balance explicitly
-        $openingBalance = $manager->opening_balance ?? 0;
-        if($openingBalance > 0) {
-            $accounts->push((object)['name' => 'Opening Balance (Equity)', 'debit' => 0, 'credit' => $openingBalance]);
+        // Add Equity (Cr)
+        foreach($equities as $eq) {
+            if(round($eq->balance, 2) != 0) {
+                // FIX: Added 'group' => 'Equity'
+                $accounts->push((object)['group' => 'Equity', 'name' => $eq->name, 'debit' => 0, 'credit' => $eq->balance]);
+            }
         }
 
         // Add Income (Cr)
         foreach($income as $inc) {
-            if($inc->period_total != 0) {
-                $accounts->push((object)['name' => 'Inc: ' . $inc->name, 'debit' => 0, 'credit' => $inc->period_total]);
+            if(round($inc->period_total, 2) != 0) {
+                // FIX: Added 'group' => 'Income'
+                $accounts->push((object)['group' => 'Income', 'name' => $inc->name, 'debit' => 0, 'credit' => $inc->period_total]);
             }
         }
 
@@ -391,7 +393,7 @@ class ReportController extends Controller
     }
 
 
-    // === LOAN AGING (Unchanged) ===
+    // === LOAN AGING ===
     public function loanAging()
     {
         $manager = Auth::user()->loanManager;

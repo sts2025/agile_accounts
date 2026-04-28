@@ -106,6 +106,23 @@
                     </ul>
                 </div>
             </li>
+
+            {{-- ============================================== --}}
+            {{-- MICROFINANCE HUB (FORCED VISIBLE) --}}
+            {{-- ============================================== --}}
+            <div class="sidebar-sub-header" style="color: #f1c40f;"><i class="fas fa-crown me-1"></i> Microfinance Hub</div>
+            <li class="nav-item">
+                <a class="nav-link collapsed" href="#mfi-submenu" data-bs-toggle="collapse" style="color: #f1c40f;"> 
+                    <i class="fas fa-piggy-bank me-2"></i> Savings Accounts 
+                </a>
+                <div class="collapse {{ request()->routeIs('mfi.savings.*') ? 'show' : '' }}" id="mfi-submenu">
+                    <ul class="nav flex-column ms-2">
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.savings.index') ? 'active' : '' }}" href="{{ route('mfi.savings.index') }}">All Accounts</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.savings.create') ? 'active' : '' }}" href="{{ route('mfi.savings.create') }}">Open New Account</a></li>
+                    </ul>
+                </div>
+            </li>
+            {{-- ============================================== --}}
             
             {{-- REPORTS --}}
             <li class="nav-item">
@@ -202,7 +219,7 @@
         </div>
 
         <footer class="app-footer">
-            Managed by <strong>BKR TECH </strong> &copy; {{ date('Y') }} | 
+            Developed by <strong>STREAMLINE TECH SOLUTION</strong> &copy; {{ date('Y') }} | 
             Support: <a href="tel:{{ \App\Models\LoanManager::getGlobalSupportPhone() }}" class="fw-bold text-decoration-none">
                 {{ \App\Models\LoanManager::getGlobalSupportPhone() }}
             </a>
@@ -244,97 +261,5 @@
             observer.observe(document.body, { childList: true, subtree: true });
         });
     </script>
-    {{-- GLOBAL SPLIT PAYMENT MODAL --}}
-<div class="modal fade" id="splitPaymentModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content border-0 shadow">
-
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title fw-bold">Record Split Payment</h5>
-                <button type="button" class="btn-close btn-close-white"
-                        data-bs-dismiss="modal"></button>
-            </div>
-
-            <form action="{{ route('payments.index') }}" method="POST">
-                @csrf
-
-                <div class="modal-body">
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Select Loan</label>
-                        <select name="loan_id" id="global_loan_select"
-                                class="form-select" required>
-                            <option value="">Choose loan...</option>
-                        </select>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-6">
-                            <label class="fw-bold">Date</label>
-                            <input type="date" name="date"
-                                   class="form-control"
-                                   value="{{ date('Y-m-d') }}" required>
-                        </div>
-
-                        <div class="col-6">
-                            <label class="fw-bold">Method</label>
-                            <select name="payment_method" class="form-select">
-                                <option value="Cash">Cash</option>
-                                <option value="Bank Transfer">Bank Transfer</option>
-                                <option value="Mobile Money">Mobile Money</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="mb-2">
-                        <label class="fw-bold">Principal Paid</label>
-                        <input type="number" name="principal_paid"
-                               class="form-control"
-                               step="0.01" min="0" required>
-                    </div>
-
-                    <div class="mb-2">
-                        <label class="fw-bold">Interest Paid</label>
-                        <input type="number" name="interest_paid"
-                               class="form-control"
-                               step="0.01" min="0" required>
-                    </div>
-
-                    <div class="mt-3">
-                        <label>Reference / Notes</label>
-                        <input type="text" name="reference_id"
-                               class="form-control">
-                    </div>
-
-                </div>
-
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary"
-                            data-bs-dismiss="modal">Close</button>
-                    <button type="submit" class="btn btn-success fw-bold">
-                        Save Payment
-                    </button>
-                </div>
-
-            </form>
-        </div>
-    </div>
-</div>
-
-<script>
-function openPaymentModal(loanId = null) {
-    const modal = new bootstrap.Modal(
-        document.getElementById('splitPaymentModal')
-    );
-
-    if (loanId) {
-        const select = document.getElementById('global_loan_select');
-        if (select) select.value = loanId;
-    }
-
-    modal.show();
-}
-</script>
-
 </body>
 </html>

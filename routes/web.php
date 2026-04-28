@@ -1,8 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Database\Schema\Blueprint;
 
 // --- CONTROLLERS ---
 use App\Http\Controllers\AuthController;
@@ -29,7 +27,8 @@ use App\Http\Controllers\LoanManager\ProfileController;
 use App\Http\Controllers\LoanManager\CashTransactionController;
 use App\Http\Controllers\LoanManager\BusinessSettingsController;
 use App\Http\Controllers\LoanManager\StaffController;
-use App\Http\Controllers\LoanManager\MfiUpgradeController; // <-- ADDED: MFI Upgrade Controller
+use App\Http\Controllers\LoanManager\MfiUpgradeController;
+use App\Http\Controllers\LoanManager\SavingsController;
 
 // Explicitly bind {manager} to the User model
 Route::model('manager', User::class);
@@ -72,24 +71,28 @@ Route::middleware(['auth'])->group(function () {
         // "Login As" Routes
         Route::get('/users/{id}/impersonate', [AdminController::class, 'impersonate'])->name('users.impersonate');
         Route::get('/users/stop-impersonate', [AdminController::class, 'stopImpersonate'])->name('users.stop_impersonate');
-
-        // Broadcasts
-        Route::get('broadcasts', [BroadcastMessageController::class, 'index'])->name('broadcasts.index');
-        Route::post('broadcasts', [BroadcastMessageController::class, 'store'])->name('broadcasts.store');
-        Route::patch('broadcasts/{broadcast}/toggle', [BroadcastMessageController::class, 'toggle'])->name('broadcasts.toggle');
-        Route::delete('broadcasts/{broadcast}', [BroadcastMessageController::class, 'destroy'])->name('broadcasts.destroy');
-    });
+    }); // <-- Fixed the missing closure here!
 
     // ---------------------------------------------------------
     // LOAN MANAGER ROUTES (Protected by 'subscription' Check)
     // ---------------------------------------------------------
-    // Standard names restored (clients.index, loans.store, etc.)
     Route::middleware(['subscription'])->group(function () {
 
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
         // --- ADDED: MFI Upgrade Route ---
         Route::post('/upgrade-to-mfi', [MfiUpgradeController::class, 'upgradeToMfi'])->name('mfi.upgrade');
+        
+        // --- MFI SAVINGS ROUTES (Fixed & Consolidated) ---
+        Route::prefix('mfi')->name('mfi.')->group(function () {
+            Route::get('/savings', [SavingsController::class, 'index'])->name('savings.index');
+            Route::get('/savings/create', [SavingsController::class, 'create'])->name('savings.create');
+            Route::post('/savings', [SavingsController::class, 'store'])->name('savings.store');
+            
+            // MISSING ROUTES ADDED HERE:
+            Route::get('/savings/{id}', [SavingsController::class, 'show'])->name('savings.show');
+            Route::post('/savings/{id}/transact', [SavingsController::class, 'transaction'])->name('savings.transaction');
+        });
 
         // User Profile
         Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -108,6 +111,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/loans/calculator', [LoanController::class, 'showCalculator'])->name('loans.showCalculator');
         Route::get('/loans/{loan}/download-agreement', [LoanController::class, 'downloadLoanAgreement'])->name('loans.downloadAgreement');
         Route::patch('/loans/{loan}/status', [LoanController::class, 'updateStatus'])->name('loans.update-status');
+        Route::post('/loans/{loan}/approve', [LoanController::class, 'approve'])->name('loans.approve');
+        Route::post('/loans/{loan}/reject', [LoanController::class, 'reject'])->name('loans.reject');
         Route::resource('loans', LoanController::class);
 
         // Payments
@@ -146,66 +151,4 @@ Route::middleware(['auth'])->group(function () {
             Route::delete('/staff/{id}', [StaffController::class, 'destroy'])->name('staff.destroy');
         });
     });
-});
-
-
-// =============================================================
-// DATABASE FIXERS & UTILITIES
-// =============================================================
-
-Route::get('/fix-database', function() {
-    try {
-        try { Schema::table('clients', fn($t) => $t->dropForeign('clients_loan_manager_id_foreign')); } catch (\Exception $e) {}
-        Schema::table('clients', fn($t) => $t->foreign('loan_manager_id')->references('id')->on('loan_managers')->onDelete('cascade'));
-
-        try { Schema::table('loans', fn($t) => $t->dropForeign('loans_loan_manager_id_foreign')); } catch (\Exception $e) {}
-        Schema::table('loans', fn($t) => $t->foreign('loan_manager_id')->references('id')->on('loan_managers')->onDelete('cascade'));
-
-        return "SUCCESS! Database Fixed.";
-    } catch (\Exception $e) { return "Error: " . $e->getMessage(); }
-});
-
-Route::get('/fix-transaction-tables', function() {
-    $results = "";
-    $tables = ['bank_transactions', 'cash_transfers', 'expenses'];
-    foreach ($tables as $tableName) {
-        if (!Schema::hasTable($tableName)) continue;
-        try {
-            Schema::table($tableName, fn($t) => $t->dropForeign($tableName . '_loan_manager_id_foreign'));
-        } catch (\Exception $e) {}
-        try {
-            Schema::table($tableName, fn($t) => $t->foreign('loan_manager_id')->references('id')->on('loan_managers')->onDelete('cascade'));
-            $results .= "$tableName fixed. ";
-        } catch (\Exception $e) { $results .= "$tableName error: " . $e->getMessage(); }
-    }
-    return $results;
-});
-
-Route::get('/update-db-v3-cashiers', function () {
-    if (!Schema::hasColumn('loan_managers', 'opening_balance')) {
-        Schema::table('loan_managers', function (Blueprint $table) {
-            $table->decimal('opening_balance', 15, 2)->default(0)->after('company_logo');
-        });
-    }
-    Schema::table('users', function (Blueprint $table) {
-        if (!Schema::hasColumn('users', 'role')) {
-            $table->string('role')->default('manager')->after('email'); 
-        }
-        if (!Schema::hasColumn('users', 'loan_manager_id')) {
-            $table->unsignedBigInteger('loan_manager_id')->nullable()->after('role');
-        }
-    });
-    return "SUCCESS: Cashier/Balance columns added.";
-});
-
-Route::get('/fix-database-columns', function () {
-    $tableName = 'loan_managers';
-    Schema::table($tableName, function (Blueprint $table) use ($tableName) {
-        if (!Schema::hasColumn($tableName, 'company_name')) $table->string('company_name')->nullable();
-        if (!Schema::hasColumn($tableName, 'company_address')) $table->string('company_address')->nullable();
-        if (!Schema::hasColumn($tableName, 'company_phone')) $table->string('company_phone')->nullable();
-        if (!Schema::hasColumn($tableName, 'company_email')) $table->string('company_email')->nullable();
-        if (!Schema::hasColumn($tableName, 'company_logo')) $table->string('company_logo')->nullable();
-    });
-    return 'SUCCESS: Settings columns fixed.';
 });
