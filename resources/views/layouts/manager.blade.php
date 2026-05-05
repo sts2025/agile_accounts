@@ -10,7 +10,14 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { display: flex; background-color: #f4f7f6; }
-        .sidebar { width: 280px; min-height: 100vh; background-color: #2c3e50; color: white; padding: 20px; position: fixed; top: 0; left: 0; overflow-y: auto; z-index: 1000; }
+        
+        .sidebar, .main-sidebar, aside {
+            height: 100vh !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+        }
+
+        .sidebar { width: 280px; min-height: 100vh; background-color: #2c3e50; color: white; padding: 20px; position: fixed; top: 0; left: 0; z-index: 1000; }
         .sidebar .logo { text-align: center; margin-bottom: 30px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; }
         .sidebar .nav-link { color: #e1e8ec; padding: 10px 15px; border-radius: 5px; margin-bottom: 5px; transition: all 0.2s; }
         .sidebar .nav-link:hover, .sidebar .nav-link.active { background-color: #34495e; color: white; }
@@ -189,9 +196,9 @@
             <div class="top-menu">
                 <div class="d-flex align-items-center">
                     <div class="text-end me-3 d-none d-md-block">
-                        <div class="fw-bold small text-dark">{{ Auth::user()->name }}</div>
+                        <div class="fw-bold small text-dark">{{ Auth::user()->name ?? 'User' }}</div>
                         <div class="text-muted" style="font-size: 0.75rem;">
-                            {{ Auth::user()->role == 'cashier' ? 'Cashier' : 'Loan Manager' }}
+                            {{ (Auth::user()->role ?? '') == 'cashier' ? 'Cashier' : 'Loan Manager' }}
                         </div>
                     </div>
                     
@@ -220,8 +227,8 @@
 
         <footer class="app-footer">
             Developed by <strong>STREAMLINE TECH SOLUTION</strong> &copy; {{ date('Y') }} | 
-            Support: <a href="tel:{{ \App\Models\LoanManager::getGlobalSupportPhone() }}" class="fw-bold text-decoration-none">
-                {{ \App\Models\LoanManager::getGlobalSupportPhone() }}
+            Support: <a href="tel:{{ \App\Models\LoanManager::getGlobalSupportPhone() ?? '' }}" class="fw-bold text-decoration-none">
+                {{ \App\Models\LoanManager::getGlobalSupportPhone() ?? 'Contact Admin' }}
             </a>
         </footer>
     </div>

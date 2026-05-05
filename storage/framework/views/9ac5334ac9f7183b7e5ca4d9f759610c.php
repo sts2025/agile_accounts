@@ -35,7 +35,6 @@
         </div>
     <?php endif; ?>
 
-    
     <?php if($errors->any()): ?>
         <div class="alert alert-danger alert-dismissible fade show shadow-sm border-start border-danger border-4">
             <i class="fas fa-exclamation-circle me-2"></i> <strong>Transaction Failed:</strong>
@@ -52,14 +51,28 @@
         
         <div class="col-lg-4 mb-4">
             <div class="card shadow-sm border-0 border-start border-success border-4 h-100">
-                <div class="card-body text-center py-5">
-                    <h6 class="text-uppercase text-muted fw-bold mb-3">Available Balance</h6>
-                    <h2 class="display-5 fw-bold text-success font-monospace mb-4">
-                        <?php echo e(optional(Auth::user()->getCompany())->currency_symbol ?? 'UGX'); ?> <?php echo e(number_format($account->balance)); ?>
+                <div class="card-body py-4">
+                    <h6 class="text-uppercase text-muted fw-bold mb-3 text-center">Account Balance</h6>
+                    <div class="text-center mb-4">
+                        <h2 class="display-5 fw-bold text-success font-monospace mb-1">
+                            <?php echo e(optional(Auth::user()->getCompany())->currency_symbol ?? 'UGX'); ?> <?php echo e(number_format($account->balance)); ?>
 
-                    </h2>
+                        </h2>
+                        
+                        
+                        <?php if($account->lien_amount > 0): ?>
+                            <small class="text-danger d-block">
+                                <i class="fas fa-lock"></i> Locked as Loan Security: UGX <?php echo e(number_format($account->lien_amount)); ?>
+
+                            </small>
+                            <small class="text-success fw-bold d-block mt-1">
+                                Available to Withdraw: UGX <?php echo e(number_format($account->balance - $account->lien_amount)); ?>
+
+                            </small>
+                        <?php endif; ?>
+                    </div>
                     
-                    <div class="d-grid gap-3">
+                    <div class="d-grid gap-3 mt-4">
                         <button class="btn btn-success btn-lg fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#depositModal">
                             <i class="fas fa-arrow-down me-2"></i> Deposit Cash
                         </button>
@@ -87,7 +100,7 @@
                                 <tr>
                                     <th class="ps-4">Date</th>
                                     <th>Type</th>
-                                    <th>Method</th>
+                                    <th>Ref/Method</th>
                                     <th>Narration</th>
                                     <th class="text-end pe-4">Amount</th>
                                 </tr>
@@ -95,18 +108,19 @@
                             <tbody>
                                 <?php $__empty_1 = true; $__currentLoopData = $account->transactions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $tx): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                                 <tr>
-                                    <td class="ps-4 text-muted small"><?php echo e(\Carbon\Carbon::parse($tx->transaction_date)->format('d M, Y H:i')); ?></td>
+                                    
+                                    <td class="ps-4 text-muted small"><?php echo e(\Carbon\Carbon::parse($tx->created_at)->format('d M, Y H:i')); ?></td>
                                     <td>
-                                        <?php if($tx->transaction_type == 'deposit'): ?>
+                                        <?php if($tx->type == 'deposit'): ?>
                                             <span class="badge bg-success bg-opacity-10 text-success px-2 py-1"><i class="fas fa-plus me-1"></i> Deposit</span>
                                         <?php else: ?>
                                             <span class="badge bg-warning bg-opacity-10 text-warning px-2 py-1"><i class="fas fa-minus me-1"></i> Withdraw</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td class="text-muted small"><?php echo e($tx->payment_method); ?></td>
-                                    <td class="text-muted small"><?php echo e($tx->narration); ?></td>
-                                    <td class="text-end pe-4 fw-bold font-monospace <?php echo e($tx->transaction_type == 'deposit' ? 'text-success' : 'text-danger'); ?>">
-                                        <?php echo e($tx->transaction_type == 'deposit' ? '+' : '-'); ?> <?php echo e(number_format($tx->amount)); ?>
+                                    <td class="text-muted small"><?php echo e($tx->reference ?? 'N/A'); ?></td>
+                                    <td class="text-muted small">Via Controller Logic</td>
+                                    <td class="text-end pe-4 fw-bold font-monospace <?php echo e($tx->type == 'deposit' ? 'text-success' : 'text-danger'); ?>">
+                                        <?php echo e($tx->type == 'deposit' ? '+' : '-'); ?> <?php echo e(number_format($tx->amount)); ?>
 
                                     </td>
                                 </tr>
@@ -128,9 +142,12 @@
 <div class="modal fade" id="depositModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content border-0 shadow-lg">
-            <form action="<?php echo e(route('mfi.savings.transaction', $account->id)); ?>" method="POST">
+            
+            <form action="<?php echo e(route('mfi.savings.deposit')); ?>" method="POST">
                 <?php echo csrf_field(); ?>
-                <input type="hidden" name="type" value="deposit">
+                
+                <input type="hidden" name="savings_account_id" value="<?php echo e($account->id); ?>">
+                
                 <div class="modal-header bg-success text-white">
                     <h5 class="modal-title fw-bold">Deposit Cash</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -138,24 +155,15 @@
                 <div class="modal-body bg-light">
                     <div class="mb-3">
                         <label class="form-label fw-bold">Amount to Deposit</label>
-                        
-                        <input type="number" step="any" name="amount" class="form-control form-control-lg text-end fw-bold font-monospace text-success border-success" required min="1">
+                        <input type="number" step="any" name="amount" class="form-control form-control-lg text-end fw-bold font-monospace text-success border-success" required min="1000">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold small text-muted">Method</label>
-                        <select name="payment_method" class="form-select">
-                            <option value="Cash">Cash</option>
-                            <option value="Bank Transfer">Bank Transfer</option>
-                            <option value="Mobile Money">Mobile Money</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small text-muted">Narration / Notes</label>
-                        <input type="text" name="narration" class="form-control" placeholder="e.g. Weekly savings deposit">
+                        <label class="form-label fw-bold small text-muted">Reference (Mobile Money ID, Receipt No.)</label>
+                        <input type="text" name="reference" class="form-control" placeholder="e.g. MTN-123456789">
                     </div>
                 </div>
                 <div class="modal-footer bg-white">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn-light btn" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-success fw-bold px-4">Confirm Deposit</button>
                 </div>
             </form>
@@ -167,37 +175,33 @@
 <div class="modal fade" id="withdrawModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content border-0 shadow-lg">
-            <form action="<?php echo e(route('mfi.savings.transaction', $account->id)); ?>" method="POST">
+            
+            <form action="<?php echo e(route('mfi.savings.withdraw')); ?>" method="POST">
                 <?php echo csrf_field(); ?>
-                <input type="hidden" name="type" value="withdrawal">
+                
+                <input type="hidden" name="savings_account_id" value="<?php echo e($account->id); ?>">
+                
                 <div class="modal-header bg-warning text-dark">
                     <h5 class="modal-title fw-bold">Withdraw Cash</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body bg-light">
                     <div class="alert alert-info py-2 small">
-                        <strong>Available Balance:</strong> <?php echo e(optional(Auth::user()->getCompany())->currency_symbol ?? 'UGX'); ?> <?php echo e(number_format($account->balance)); ?>
+                        <strong>Available to Withdraw:</strong> <?php echo e(optional(Auth::user()->getCompany())->currency_symbol ?? 'UGX'); ?> <?php echo e(number_format($account->balance - $account->lien_amount)); ?>
 
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-bold">Amount to Withdraw</label>
-                        <input type="number" step="any" name="amount" class="form-control form-control-lg text-end fw-bold font-monospace text-danger border-warning" required min="1" max="<?php echo e($account->balance); ?>">
+                        
+                        <input type="number" step="any" name="amount" class="form-control form-control-lg text-end fw-bold font-monospace text-danger border-warning" required min="1000" max="<?php echo e($account->balance - $account->lien_amount); ?>">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-bold small text-muted">Method</label>
-                        <select name="payment_method" class="form-select">
-                            <option value="Cash">Cash</option>
-                            <option value="Bank Transfer">Bank Transfer</option>
-                            <option value="Mobile Money">Mobile Money</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small text-muted">Narration / Notes</label>
-                        <input type="text" name="narration" class="form-control" placeholder="e.g. School fees withdrawal">
+                        <label class="form-label fw-bold small text-muted">Reference / Narration</label>
+                        <input type="text" name="reference" class="form-control" placeholder="e.g. School fees withdrawal">
                     </div>
                 </div>
                 <div class="modal-footer bg-white">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn-light btn" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-warning fw-bold px-4">Confirm Withdrawal</button>
                 </div>
             </form>

@@ -29,6 +29,8 @@ use App\Http\Controllers\LoanManager\BusinessSettingsController;
 use App\Http\Controllers\LoanManager\StaffController;
 use App\Http\Controllers\LoanManager\MfiUpgradeController;
 use App\Http\Controllers\LoanManager\SavingsController;
+// --- ADDED: The new Transaction Engine Controller ---
+use App\Http\Controllers\LoanManager\SavingsTransactionController;
 
 // Explicitly bind {manager} to the User model
 Route::model('manager', User::class);
@@ -71,7 +73,7 @@ Route::middleware(['auth'])->group(function () {
         // "Login As" Routes
         Route::get('/users/{id}/impersonate', [AdminController::class, 'impersonate'])->name('users.impersonate');
         Route::get('/users/stop-impersonate', [AdminController::class, 'stopImpersonate'])->name('users.stop_impersonate');
-    }); // <-- Fixed the missing closure here!
+    });
 
     // ---------------------------------------------------------
     // LOAN MANAGER ROUTES (Protected by 'subscription' Check)
@@ -80,18 +82,21 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-        // --- ADDED: MFI Upgrade Route ---
+        // --- MFI Upgrade Route ---
         Route::post('/upgrade-to-mfi', [MfiUpgradeController::class, 'upgradeToMfi'])->name('mfi.upgrade');
         
-        // --- MFI SAVINGS ROUTES (Fixed & Consolidated) ---
+        // --- MFI SAVINGS ROUTES (Updated to use the new Transaction Engine) ---
+        // NOTE: Once you register the 'check.microfinance' middleware in Kernel.php, 
+        // you can wrap this group like this: Route::middleware(['check.microfinance'])->prefix('mfi')...
         Route::prefix('mfi')->name('mfi.')->group(function () {
             Route::get('/savings', [SavingsController::class, 'index'])->name('savings.index');
             Route::get('/savings/create', [SavingsController::class, 'create'])->name('savings.create');
             Route::post('/savings', [SavingsController::class, 'store'])->name('savings.store');
-            
-            // MISSING ROUTES ADDED HERE:
             Route::get('/savings/{id}', [SavingsController::class, 'show'])->name('savings.show');
-            Route::post('/savings/{id}/transact', [SavingsController::class, 'transaction'])->name('savings.transaction');
+            
+            // --- NEW: Secure Database Transaction Routes ---
+            Route::post('/savings/deposit', [SavingsTransactionController::class, 'deposit'])->name('savings.deposit');
+            Route::post('/savings/withdraw', [SavingsTransactionController::class, 'withdraw'])->name('savings.withdraw');
         });
 
         // User Profile

@@ -4,6 +4,7 @@
 $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
 ?>
 @extends('layouts.manager')
+
 @section('title', 'Loan Manager Dashboard')
 
 @push('styles')
@@ -28,6 +29,19 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
         .quick-actions .btn {
             margin-bottom: 10px;
             margin-right: 5px;
+        }
+
+        /* ========================================== */
+        /* FORCE KILL STUCK GREY SCREENS / BACKDROPS  */
+        /* ========================================== */
+        .modal-backdrop, .modal-backdrop.fade.show { 
+            display: none !important; 
+            z-index: -9999 !important; 
+            pointer-events: none !important;
+        }
+        body.modal-open, html { 
+            overflow: auto !important; 
+            pointer-events: auto !important; 
         }
     </style>
 @endpush
@@ -111,8 +125,8 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
     </div>
 
     <div class="row">
-        {{-- Total Clients --}}
-        <div class="col-xl-4 col-md-6 mb-4">
+        {{-- Total Clients (Changed to col-xl-3 to fit 4 cards) --}}
+        <div class="col-xl-3 col-md-6 mb-4">
             <div class="card border-left-primary shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
@@ -127,8 +141,9 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                 </div>
             </div>
         </div>
-        {{-- Active Loans --}}
-        <div class="col-xl-4 col-md-6 mb-4">
+        
+        {{-- Active Loans (Changed to col-xl-3 to fit 4 cards) --}}
+        <div class="col-xl-3 col-md-6 mb-4">
             <div class="card border-left-success shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
@@ -143,8 +158,9 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                 </div>
             </div>
         </div>
-        {{-- Total Loaned Amount --}}
-        <div class="col-xl-4 col-md-6 mb-4">
+        
+        {{-- Total Loaned Amount (Changed to col-xl-3 to fit 4 cards) --}}
+        <div class="col-xl-3 col-md-6 mb-4">
             <div class="card border-left-info shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
@@ -154,6 +170,27 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                         </div>
                         <div class="col-auto">
                             <i class="fas fa-piggy-bank fa-2x text-gray-300 icon-lg"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- NEW: Net Realized Profit --}}
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Realized Profit</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ $currencySymbol }} {{ number_format($netRealizedProfit ?? 0, 0) }}</div>
+                            <div class="mt-1 small text-muted" style="font-size: 0.75rem; line-height: 1.2;">
+                                Interest: {{ number_format($totalInterestPaid ?? 0) }}<br>
+                                Fees: {{ number_format($totalProcessingFees ?? 0) }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-chart-line fa-2x text-gray-300 icon-lg"></i>
                         </div>
                     </div>
                 </div>
@@ -486,7 +523,7 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                 });
 
                 // --- 2. Dynamic Loan Selection based on Client Selection ---
-                const loanCurrencySymbol = "{{ $currencySymbol ?? '' }}";
+                const loanCurrencySymbol = "{!! addslashes($currencySymbol ?? '') !!}";
                 
                 $('#client_id_select').on('change', function() {
                     let selectedOption = $(this).find(':selected');
@@ -526,11 +563,11 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                     new Chart(ctx, {
                         type: 'line',
                         data: {
-                            labels: @json($chartData['labels'] ?? []),
+                            labels: {!! json_encode($chartData['labels'] ?? []) !!},
                             datasets: [
                                 {
                                     label: 'Loans Given',
-                                    data: @json($chartData['loans'] ?? []),
+                                    data: {!! json_encode($chartData['loans'] ?? []) !!},
                                     borderColor: 'rgb(231, 74, 59)',
                                     backgroundColor: 'rgba(231, 74, 59, 0.1)',
                                     tension: 0.3,
@@ -538,7 +575,7 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
                                 },
                                 {
                                     label: 'Payments Received',
-                                    data: @json($chartData['payments'] ?? []),
+                                    data: {!! json_encode($chartData['payments'] ?? []) !!},
                                     borderColor: 'rgb(28, 200, 138)',
                                     backgroundColor: 'rgba(28, 200, 138, 0.1)',
                                     tension: 0.3,
