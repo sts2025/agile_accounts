@@ -8,6 +8,10 @@
         <div>
             <a href="{{ route('clients.index') }}" class="btn btn-secondary">Manage Clients</a>
             <a href="{{ route('loans.create') }}" class="btn btn-primary">Create New Loan</a>
+            {{-- NEW PENDING FILTER BUTTON --}}
+            <a href="{{ route('loans.index', ['filter' => 'pending']) }}" class="btn btn-warning ms-2 fw-bold text-dark">
+                <i class="fas fa-clock"></i> Pending Approvals
+            </a>
         </div>
     </div>
     
@@ -17,10 +21,8 @@
         </div>
     @endif
     
-    {{-- Display success/error messages for status updates --}}
     <div id="status-message-container"></div>
 
-    {{-- Search Card --}}
     <div class="card mb-4">
         <div class="card-header">Find a Loan</div>
         <div class="card-body">
@@ -33,7 +35,6 @@
         </div>
     </div>
 
-    {{-- Table Card --}}
     <div class="card">
         <div class="card-body">
             <div class="table-responsive">
@@ -53,7 +54,7 @@
                     <tbody>
                         @forelse ($loans as $loan)
                             @php
-                                // --- FIX: CALCULATE MISSING INFO ---
+                                // --- CALCULATE MISSING INFO ---
                                 $currency = $currency_symbol ?? 'UGX';
                                 
                                 // 1. Interest Amount
@@ -75,6 +76,12 @@
                                     <a href="{{ route('clients.edit', $loan->client->id) }}" class="font-weight-bold text-dark" style="text-decoration: underline;">
                                         {{ $loan->client->name ?? 'Unknown' }}
                                     </a>
+                                    
+                                    {{-- NEW: Loan Number Badge --}}
+                                    <span class="badge badge-light border text-dark" style="font-size: 0.75rem; margin-left: 8px;">
+                                        Loan #{{ $loan->id }}
+                                    </span>
+                                    
                                     <br>
                                     <small class="text-muted">{{ $loan->client->phone_number ?? '' }}</small>
                                 </td>
@@ -82,58 +89,64 @@
                                 {{-- Principal --}}
                                 <td>{{ number_format($loan->principal_amount) }}</td>
 
-                                {{-- Interest (Calculated) --}}
                                 <td>
                                     {{ number_format($interest) }}
                                     <small class="d-block text-muted">{{ $loan->interest_rate }}%</small>
                                 </td>
 
-                                {{-- Total Due (Calculated) --}}
                                 <td class="font-weight-bold">{{ number_format($totalDue) }}</td>
-
-                                {{-- Paid (Calculated) --}}
                                 <td class="text-success">{{ number_format($paid) }}</td>
-
-                                {{-- Balance (Calculated) --}}
                                 <td class="text-danger font-weight-bold">
                                     {{ number_format($balance) }} <small>{{ $currency }}</small>
                                 </td>
 
-                                {{-- Status Button --}}
+                                {{-- NEW: Status Column shows Yellow Badge if Pending --}}
                                 <td>
-                                    <form action="{{ route('loans.update-status', $loan->id) }}" method="POST" class="d-inline status-form" data-loan-id="{{ $loan->id }}">
-                                        @csrf
-                                        @method('PATCH')
-                                        <input type="hidden" name="new_status" value="{{ $loan->status == 'active' ? 'paid' : 'active' }}">
-                                        
-                                        @php
-                                            $btnClass = match($loan->status) {
-                                                'active' => 'btn-primary',
-                                                'paid' => 'btn-success',
-                                                'defaulted' => 'btn-danger',
-                                                default => 'btn-secondary'
-                                            };
-                                        @endphp
-                                        
-                                        <button type="submit" 
-                                                class="btn btn-sm text-white rounded-pill loan-status-btn {{ $btnClass }}" 
-                                                data-current-status="{{ $loan->status }}"
-                                                id="status-btn-{{ $loan->id }}"
-                                                style="min-width: 80px;">
-                                            {{ ucfirst($loan->status) }}
-                                        </button>
-                                    </form>
+                                    @if($loan->approval_status === 'pending')
+                                        <span class="badge bg-warning text-dark px-3 py-2 rounded-pill">Pending</span>
+                                    @else
+                                        <form action="{{ route('loans.update-status', $loan->id) }}" method="POST" class="d-inline status-form" data-loan-id="{{ $loan->id }}">
+                                            @csrf
+                                            @method('PATCH')
+                                            <input type="hidden" name="new_status" value="{{ $loan->status == 'active' ? 'paid' : 'active' }}">
+                                            
+                                            @php
+                                                $btnClass = match($loan->status) {
+                                                    'active' => 'btn-primary',
+                                                    'paid' => 'btn-success',
+                                                    'defaulted' => 'btn-danger',
+                                                    'rejected' => 'btn-dark',
+                                                    default => 'btn-secondary'
+                                                };
+                                            @endphp
+                                            
+                                            <button type="submit" 
+                                                    class="btn btn-sm text-white rounded-pill loan-status-btn {{ $btnClass }}" 
+                                                    data-current-status="{{ $loan->status }}"
+                                                    id="status-btn-{{ $loan->id }}"
+                                                    style="min-width: 80px;">
+                                                {{ ucfirst($loan->status) }}
+                                            </button>
+                                        </form>
+                                    @endif
                                 </td>
 
-                                {{-- Actions --}}
                                 <td>
                                     <div class="btn-group btn-group-sm">
-                                        <a href="{{ route('loans.show', $loan->id) }}" class="btn btn-info" title="View"><i class="fas fa-eye"></i></a>
+                                        {{-- NEW: Approve / Reject Buttons --}}
+                                        @if($loan->approval_status === 'pending')
+                                            <form method="POST" action="{{ route('loans.approve', $loan->id) }}" style="display:inline;">
+                                                @csrf
+                                                <button type="submit" class="btn btn-success" onclick="return confirm('Approve this loan and DISBURSE funds?');" title="Approve"><i class="fas fa-check"></i></button>
+                                            </form>
+                                            <form method="POST" action="{{ route('loans.reject', $loan->id) }}" style="display:inline;">
+                                                @csrf
+                                                <button type="submit" class="btn btn-danger" onclick="return confirm('Reject this application?');" title="Reject"><i class="fas fa-times"></i></button>
+                                            </form>
+                                        @endif
+                                        
+                                        <a href="{{ route('loans.show', $loan->id) }}" class="btn btn-info text-white" title="View"><i class="fas fa-eye"></i></a>
                                         <a href="{{ route('loans.edit', $loan->id) }}" class="btn btn-secondary" title="Edit"><i class="fas fa-edit"></i></a>
-                                        <form method="POST" action="{{ route('loans.destroy', $loan->id) }}" style="display:inline;">
-                                            @csrf @method('DELETE')
-                                            <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure?');" title="Delete"><i class="fas fa-trash"></i></button>
-                                        </form>
                                     </div>
                                 </td>
                             </tr>
@@ -162,9 +175,7 @@
             messageContainer.innerHTML = `
                 <div class="alert alert-${type} alert-dismissible fade show" role="alert">
                     ${message}
-                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
             `;
             setTimeout(() => { messageContainer.innerHTML = ''; }, 5000);

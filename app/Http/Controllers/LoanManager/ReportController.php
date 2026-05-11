@@ -399,33 +399,52 @@ class ReportController extends Controller
         $manager = Auth::user()->loanManager;
         $overdueLoans = [];
         
+        // Fetch active loans
         $activeLoans = $manager->loans()
-            ->where('status', 'active')
-            ->with(['repaymentSchedules', 'client', 'payments'])
+            ->whereIn('status', ['active', 'approved'])
+            ->with(['client', 'payments'])
             ->get();
 
         foreach ($activeLoans as $loan) {
-            $totalDueToDate = $loan->repaymentSchedules()->where('due_date', '<=', now())->sum('amount'); 
+            $totalRepayable = $loan->principal_amount + ($loan->principal_amount * ($loan->interest_rate / 100)) + ($loan->processing_fee ?? 0);
             $totalPaid = $loan->payments->sum('amount_paid');
-            $arrears = $totalDueToDate - $totalPaid;
             
-            if ($arrears > 0.01) { 
-                $firstMissedSchedule = $loan->repaymentSchedules()
-                    ->where('due_date', '<', now())
-                    ->orderBy('due_date', 'asc')
-                    ->first();
+            // Mathematical Arrears Calculation (Bulletproof Fallback)
+            $startDate = \Carbon\Carbon::parse($loan->start_date);
+            $term = max((int)$loan->term, 1);
+            $freq = strtolower($loan->repayment_frequency ?? 'months');
+            
+            if (str_contains($freq, 'month')) {
+                $endDate = $startDate->copy()->addMonths($term);
+            } elseif (str_contains($freq, 'week')) {
+                $endDate = $startDate->copy()->addWeeks($term);
+            } else {
+                $endDate = $startDate->copy()->addMonths($term); // Default
+            }
+            
+            $totalDays = max($startDate->diffInDays($endDate), 1);
+            $daysElapsed = $startDate->diffInDays(now(), false);
+            
+            // If the loan has officially started
+            if ($daysElapsed > 0) {
+                // Calculate exactly how much SHOULD have been paid by today based on time passed
+                $timeRatio = min($daysElapsed / $totalDays, 1);
+                $expectedPayment = $totalRepayable * $timeRatio;
+                
+                $arrears = $expectedPayment - $totalPaid;
+                
+                // If they are behind by more than 0.01
+                if ($arrears > 0.01) {
+                    $loan->days_missed = $daysElapsed;
+                    $loan->arrears = $arrears;
+                    $loan->total_balance = max(0, $totalRepayable - $totalPaid);
                     
-                $loan->days_missed = $firstMissedSchedule ? Carbon::parse($firstMissedSchedule->due_date)->diffInDays(now()) : 0;
-                $loan->arrears = $arrears;
-                
-                $totalRepayable = $loan->principal_amount + ($loan->principal_amount * ($loan->interest_rate / 100)) + ($loan->processing_fee ?? 0);
-                $loan->total_balance = max(0, $totalRepayable - $totalPaid);
-                
-                $overdueLoans[] = $loan;
+                    $overdueLoans[] = $loan;
+                }
             }
         }
         
-        return view('loan-manager.reports.loan-aging', ['loans' => $overdueLoans]);
+        return view('loan-manager.reports.loan-aging', ['loans' => collect($overdueLoans)]);
     }
 
     // === PRINT FORMS ===

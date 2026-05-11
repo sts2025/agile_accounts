@@ -8,6 +8,10 @@
         <div>
             <a href="<?php echo e(route('clients.index')); ?>" class="btn btn-secondary">Manage Clients</a>
             <a href="<?php echo e(route('loans.create')); ?>" class="btn btn-primary">Create New Loan</a>
+            
+            <a href="<?php echo e(route('loans.index', ['filter' => 'pending'])); ?>" class="btn btn-warning ms-2 fw-bold text-dark">
+                <i class="fas fa-clock"></i> Pending Approvals
+            </a>
         </div>
     </div>
     
@@ -18,10 +22,8 @@
         </div>
     <?php endif; ?>
     
-    
     <div id="status-message-container"></div>
 
-    
     <div class="card mb-4">
         <div class="card-header">Find a Loan</div>
         <div class="card-body">
@@ -34,7 +36,6 @@
         </div>
     </div>
 
-    
     <div class="card">
         <div class="card-body">
             <div class="table-responsive">
@@ -54,7 +55,7 @@
                     <tbody>
                         <?php $__empty_1 = true; $__currentLoopData = $loans; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $loan): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                             <?php
-                                // --- FIX: CALCULATE MISSING INFO ---
+                                // --- CALCULATE MISSING INFO ---
                                 $currency = $currency_symbol ?? 'UGX';
                                 
                                 // 1. Interest Amount
@@ -77,6 +78,13 @@
                                         <?php echo e($loan->client->name ?? 'Unknown'); ?>
 
                                     </a>
+                                    
+                                    
+                                    <span class="badge badge-light border text-dark" style="font-size: 0.75rem; margin-left: 8px;">
+                                        Loan #<?php echo e($loan->id); ?>
+
+                                    </span>
+                                    
                                     <br>
                                     <small class="text-muted"><?php echo e($loan->client->phone_number ?? ''); ?></small>
                                 </td>
@@ -84,60 +92,66 @@
                                 
                                 <td><?php echo e(number_format($loan->principal_amount)); ?></td>
 
-                                
                                 <td>
                                     <?php echo e(number_format($interest)); ?>
 
                                     <small class="d-block text-muted"><?php echo e($loan->interest_rate); ?>%</small>
                                 </td>
 
-                                
                                 <td class="font-weight-bold"><?php echo e(number_format($totalDue)); ?></td>
-
-                                
                                 <td class="text-success"><?php echo e(number_format($paid)); ?></td>
-
-                                
                                 <td class="text-danger font-weight-bold">
                                     <?php echo e(number_format($balance)); ?> <small><?php echo e($currency); ?></small>
                                 </td>
 
                                 
                                 <td>
-                                    <form action="<?php echo e(route('loans.update-status', $loan->id)); ?>" method="POST" class="d-inline status-form" data-loan-id="<?php echo e($loan->id); ?>">
-                                        <?php echo csrf_field(); ?>
-                                        <?php echo method_field('PATCH'); ?>
-                                        <input type="hidden" name="new_status" value="<?php echo e($loan->status == 'active' ? 'paid' : 'active'); ?>">
-                                        
-                                        <?php
-                                            $btnClass = match($loan->status) {
-                                                'active' => 'btn-primary',
-                                                'paid' => 'btn-success',
-                                                'defaulted' => 'btn-danger',
-                                                default => 'btn-secondary'
-                                            };
-                                        ?>
-                                        
-                                        <button type="submit" 
-                                                class="btn btn-sm text-white rounded-pill loan-status-btn <?php echo e($btnClass); ?>" 
-                                                data-current-status="<?php echo e($loan->status); ?>"
-                                                id="status-btn-<?php echo e($loan->id); ?>"
-                                                style="min-width: 80px;">
-                                            <?php echo e(ucfirst($loan->status)); ?>
+                                    <?php if($loan->approval_status === 'pending'): ?>
+                                        <span class="badge bg-warning text-dark px-3 py-2 rounded-pill">Pending</span>
+                                    <?php else: ?>
+                                        <form action="<?php echo e(route('loans.update-status', $loan->id)); ?>" method="POST" class="d-inline status-form" data-loan-id="<?php echo e($loan->id); ?>">
+                                            <?php echo csrf_field(); ?>
+                                            <?php echo method_field('PATCH'); ?>
+                                            <input type="hidden" name="new_status" value="<?php echo e($loan->status == 'active' ? 'paid' : 'active'); ?>">
+                                            
+                                            <?php
+                                                $btnClass = match($loan->status) {
+                                                    'active' => 'btn-primary',
+                                                    'paid' => 'btn-success',
+                                                    'defaulted' => 'btn-danger',
+                                                    'rejected' => 'btn-dark',
+                                                    default => 'btn-secondary'
+                                                };
+                                            ?>
+                                            
+                                            <button type="submit" 
+                                                    class="btn btn-sm text-white rounded-pill loan-status-btn <?php echo e($btnClass); ?>" 
+                                                    data-current-status="<?php echo e($loan->status); ?>"
+                                                    id="status-btn-<?php echo e($loan->id); ?>"
+                                                    style="min-width: 80px;">
+                                                <?php echo e(ucfirst($loan->status)); ?>
 
-                                        </button>
-                                    </form>
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
                                 </td>
 
-                                
                                 <td>
                                     <div class="btn-group btn-group-sm">
-                                        <a href="<?php echo e(route('loans.show', $loan->id)); ?>" class="btn btn-info" title="View"><i class="fas fa-eye"></i></a>
+                                        
+                                        <?php if($loan->approval_status === 'pending'): ?>
+                                            <form method="POST" action="<?php echo e(route('loans.approve', $loan->id)); ?>" style="display:inline;">
+                                                <?php echo csrf_field(); ?>
+                                                <button type="submit" class="btn btn-success" onclick="return confirm('Approve this loan and DISBURSE funds?');" title="Approve"><i class="fas fa-check"></i></button>
+                                            </form>
+                                            <form method="POST" action="<?php echo e(route('loans.reject', $loan->id)); ?>" style="display:inline;">
+                                                <?php echo csrf_field(); ?>
+                                                <button type="submit" class="btn btn-danger" onclick="return confirm('Reject this application?');" title="Reject"><i class="fas fa-times"></i></button>
+                                            </form>
+                                        <?php endif; ?>
+                                        
+                                        <a href="<?php echo e(route('loans.show', $loan->id)); ?>" class="btn btn-info text-white" title="View"><i class="fas fa-eye"></i></a>
                                         <a href="<?php echo e(route('loans.edit', $loan->id)); ?>" class="btn btn-secondary" title="Edit"><i class="fas fa-edit"></i></a>
-                                        <form method="POST" action="<?php echo e(route('loans.destroy', $loan->id)); ?>" style="display:inline;">
-                                            <?php echo csrf_field(); ?> <?php echo method_field('DELETE'); ?>
-                                            <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure?');" title="Delete"><i class="fas fa-trash"></i></button>
-                                        </form>
                                     </div>
                                 </td>
                             </tr>
@@ -167,9 +181,7 @@
             messageContainer.innerHTML = `
                 <div class="alert alert-${type} alert-dismissible fade show" role="alert">
                     ${message}
-                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
             `;
             setTimeout(() => { messageContainer.innerHTML = ''; }, 5000);
