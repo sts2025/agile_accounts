@@ -5,39 +5,39 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 
-    <title>@yield('title', 'Admin Panel')</title>
+    <title><?php echo $__env->yieldContent('title', 'Admin Panel'); ?></title>
 
-    {{-- Fonts & Icons --}}
+    
     <link href="https://fonts.googleapis.com/css?family=Nunito:200,300,400,600,700,800,900" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
 
-    {{-- SB Admin 2 (Bootstrap 4) --}}
+    
     <link href="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin-2@4.1.3/css/sb-admin-2.min.css" rel="stylesheet">
 
-    {{-- Page level styles --}}
-    @stack('styles')
+    
+    <?php echo $__env->yieldPushContent('styles'); ?>
 </head>
 
 <body id="page-top">
 
 <div id="wrapper">
 
-    {{-- ================= Sidebar ================= --}}
+    
     <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
 
-        {{-- Brand --}}
-        <a class="sidebar-brand d-flex align-items-center justify-content-center" href="{{ route('admin.dashboard') }}">
+        
+        <a class="sidebar-brand d-flex align-items-center justify-content-center" href="<?php echo e(route('admin.dashboard')); ?>">
             <div class="sidebar-brand-icon">
-                <img src="{{ asset('img/logo.png') }}" alt="Agile Accounts" style="height:40px;">
+                <img src="<?php echo e(asset('img/logo.png')); ?>" alt="Agile Accounts" style="height:40px;">
             </div>
             <div class="sidebar-brand-text mx-3">Agile Accounts</div>
         </a>
 
         <hr class="sidebar-divider my-0">
 
-        {{-- Dashboard --}}
-        <li class="nav-item {{ request()->is('admin/dashboard') ? 'active' : '' }}">
-            <a class="nav-link" href="{{ route('admin.dashboard') }}">
+        
+        <li class="nav-item <?php echo e(request()->is('admin/dashboard') ? 'active' : ''); ?>">
+            <a class="nav-link" href="<?php echo e(route('admin.dashboard')); ?>">
                 <i class="fas fa-fw fa-tachometer-alt"></i>
                 <span>Dashboard</span>
             </a>
@@ -47,15 +47,15 @@
 
         <div class="sidebar-heading">Management</div>
 
-        {{-- Managers (FIXED: Pointing to dashboard since the managers table is there) --}}
-        <li class="nav-item {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">
-            <a class="nav-link" href="{{ route('admin.dashboard') }}">
+        
+        <li class="nav-item <?php echo e(request()->routeIs('admin.dashboard') ? 'active' : ''); ?>">
+            <a class="nav-link" href="<?php echo e(route('admin.dashboard')); ?>">
                 <i class="fas fa-fw fa-users-cog"></i>
                 <span>Manage Managers</span>
             </a>
         </li>
 
-        {{-- Broadcasts (Safely disabled to prevent crashes) --}}
+        
         <li class="nav-item">
             <a class="nav-link" href="#">
                 <i class="fas fa-fw fa-bullhorn"></i>
@@ -65,20 +65,20 @@
 
         <hr class="sidebar-divider d-none d-md-block">
 
-        {{-- Toggle --}}
+        
         <div class="text-center d-none d-md-inline">
             <button class="rounded-circle border-0" id="sidebarToggle"></button>
         </div>
 
     </ul>
-    {{-- ================= End Sidebar ================= --}}
+    
 
-    {{-- ================= Content Wrapper ================= --}}
+    
     <div id="content-wrapper" class="d-flex flex-column">
 
         <div id="content">
 
-            {{-- ================= Topbar ================= --}}
+            
             <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
 
                 <button id="sidebarToggleTop" class="btn btn-link d-md-none rounded-circle mr-3">
@@ -87,24 +87,25 @@
 
                 <ul class="navbar-nav ml-auto">
 
-                    {{-- Impersonation --}}
-                    @if (Session::has('original_admin_id'))
+                    
+                    <?php if(Session::has('original_admin_id')): ?>
                         <li class="nav-item">
-                            <a class="nav-link text-danger font-weight-bold" href="{{ route('admin.users.stop_impersonate') }}">
+                            <a class="nav-link text-danger font-weight-bold" href="<?php echo e(route('admin.users.stop_impersonate')); ?>">
                                 <i class="fas fa-user-secret mr-2"></i>
                                 Stop Impersonating
                             </a>
                         </li>
-                    @endif
+                    <?php endif; ?>
 
                     <div class="topbar-divider d-none d-sm-block"></div>
 
-                    {{-- User --}}
+                    
                     <li class="nav-item dropdown no-arrow">
                         <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
                            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                             <span class="mr-2 d-none d-lg-inline text-gray-600 small">
-                                {{ Auth::user()->name ?? 'Admin' }}
+                                <?php echo e(Auth::user()->name ?? 'Admin'); ?>
+
                             </span>
                             <i class="fas fa-user-shield fa-lg"></i>
                         </a>
@@ -121,47 +122,47 @@
 
                 </ul>
             </nav>
-            {{-- ================= End Topbar ================= --}}
+            
 
-            {{-- ================= Page Content ================= --}}
+            
             <div class="container-fluid">
 
-                {{-- Page Heading --}}
+                
                 <div class="d-sm-flex align-items-center justify-content-between mb-4">
                     <h1 class="h3 mb-0 text-gray-800">
-                        @yield('page_heading', 'Admin Panel')
+                        <?php echo $__env->yieldContent('page_heading', 'Admin Panel'); ?>
                     </h1>
                 </div>
 
-                {{-- Main Content Injected Here --}}
-                @yield('content')
+                
+                <?php echo $__env->yieldContent('content'); ?>
 
             </div>
-            {{-- ================= End Page Content ================= --}}
+            
 
         </div>
 
-        {{-- ================= Footer ================= --}}
+        
         <footer class="sticky-footer bg-white">
             <div class="container my-auto">
                 <div class="copyright text-center my-auto">
-                    <span>Developed by STREAMLINE TECH SOLUTION © {{ date('Y') }}</span>
+                    <span>Developed by STREAMLINE TECH SOLUTION © <?php echo e(date('Y')); ?></span>
                 </div>
             </div>
         </footer>
-        {{-- ================= End Footer ================= --}}
+        
 
     </div>
-    {{-- ================= End Content Wrapper ================= --}}
+    
 
 </div>
 
-{{-- Scroll to Top --}}
+
 <a class="scroll-to-top rounded" href="#page-top">
     <i class="fas fa-angle-up"></i>
 </a>
 
-{{-- ================= Logout Modal ================= --}}
+
 <div class="modal fade" id="logoutModal" tabindex="-1" role="dialog">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
@@ -176,8 +177,8 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
+                <form method="POST" action="<?php echo e(route('logout')); ?>">
+                    <?php echo csrf_field(); ?>
                     <button type="submit" class="btn btn-primary">Logout</button>
                 </form>
             </div>
@@ -185,14 +186,14 @@
     </div>
 </div>
 
-{{-- ================= JS ================= --}}
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.6.0/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-easing/1.4.1/jquery.easing.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin-2@4.1.3/js/sb-admin-2.min.js"></script>
 
-{{-- Page level scripts --}}
-@yield('scripts')
+
+<?php echo $__env->yieldContent('scripts'); ?>
 
 </body>
-</html>
+</html><?php /**PATH C:\xampp\htdocs\agile_accounts\agile_accounts\resources\views/layouts/admin.blade.php ENDPATH**/ ?>
