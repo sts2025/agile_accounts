@@ -28,6 +28,8 @@ class SubscriptionController extends Controller
             $currentExpiry = Carbon::now();
         }
 
+        $isActive = 1; // Default to activating the account upon renewal
+
         switch ($request->duration) {
             case '1_month':
                 $newExpiry = $currentExpiry->addMonth();
@@ -46,14 +48,18 @@ class SubscriptionController extends Controller
                 break;
             case 'deactivate':
                 $newExpiry = Carbon::now()->subDay(); // Set to yesterday to expire immediately
+                $isActive = 0; // HARD KILL SWITCH
                 break;
             default:
                 $newExpiry = $currentExpiry;
         }
 
         $manager->subscription_expires_at = $newExpiry;
+        $manager->is_active = $isActive; // Guarantee they are locked or unlocked immediately
         $manager->save();
 
-        return back()->with('success', 'Subscription updated! New expiry: ' . $newExpiry->format('d M Y'));
+        $message = $isActive ? 'Subscription updated! New expiry: ' . $newExpiry->format('d M Y') : 'Account Deactivated and Locked Immediately!';
+
+        return back()->with('success', $message);
     }
 }

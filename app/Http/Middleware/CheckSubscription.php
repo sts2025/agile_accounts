@@ -28,20 +28,35 @@ class CheckSubscription
             // Get the business profile (Works for both the Manager and their Cashiers)
             $manager = method_exists($user, 'getCompany') ? $user->getCompany() : $user->loanManager;
 
-            // A. Check if profile exists and is not suspended
-            if (!$manager || empty($manager->currency_symbol) || $manager->is_active == 0) {
-                Auth::logout();
-                $request->session()->invalidate();
-                $request->session()->regenerateToken();
-                return redirect('/login')->withErrors(['email' => 'Account is pending activation or has been suspended.']);
-            }
+            if ($manager) {
+                // THE GOLDEN TICKET: Force fetch fresh data from database!
+                // This stops Laravel from using cached data to sneak expired users through.
+                $manager->refresh();
 
-            // B. Check Subscription Expiry (FIXED COLUMN NAME: subscription_expires_at)
-            if ($manager->subscription_expires_at && Carbon::parse($manager->subscription_expires_at)->isPast()) {
+                // A. Check Subscription Expiry FIRST
+                if ($manager->subscription_expires_at && Carbon::parse($manager->subscription_expires_at)->isPast()) {
+                    
+                    // HARD KILL SWITCH: Turn off the active status in the database permanently
+                    $manager->is_active = 0;
+                    $manager->save();
+
+                    Auth::logout();
+                    $request->session()->invalidate();
+                    $request->session()->regenerateToken();
+                    return redirect('/login')->withErrors(['email' => 'Your subscription has expired. Please contact BKR TECH( 0740859082) to renew.']);
+                }
+
+                // B. Check if profile is suspended or pending
+                if (empty($manager->currency_symbol) || $manager->is_active == 0) {
+                    Auth::logout();
+                    $request->session()->invalidate();
+                    $request->session()->regenerateToken();
+                    return redirect('/login')->withErrors(['email' => 'Account is pending activation or has been suspended.']);
+                }
+
+            } else {
                 Auth::logout();
-                $request->session()->invalidate();
-                $request->session()->regenerateToken();
-                return redirect('/login')->withErrors(['email' => 'Your subscription has expired. Please contact the Admin to renew.']);
+                return redirect('/login')->withErrors(['email' => 'Account profile error. Contact Admin.']);
             }
         }
 

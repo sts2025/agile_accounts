@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rules;
 use App\Models\User;
+use Carbon\Carbon; // Ensure Carbon is imported for the expiry check
 
 class AuthController extends Controller
 {
@@ -35,21 +36,45 @@ class AuthController extends Controller
                 return redirect()->route('admin.dashboard');
             }
 
-            // 2. LOAN MANAGER ACTIVATION CHECK
-            // We check if the Admin has assigned a currency yet.
-            // If currency is Empty (''), the account is still Pending.
-            if ($user->loanManager && !empty($user->loanManager->currency_symbol)) {
+            // 2. LOAN MANAGER ACTIVATION & EXPIRY CHECK
+            $manager = method_exists($user, 'getCompany') ? $user->getCompany() : $user->loanManager;
+
+            if ($manager) {
+                // A. Check if Subscription is Expired FIRST
+                if ($manager->subscription_expires_at && Carbon::parse($manager->subscription_expires_at)->isPast()) {
+                    // Turn off the active status in the database so they are completely blocked
+                    $manager->is_active = 0;
+                    $manager->save();
+                    
+                    Auth::logout();
+                    $request->session()->invalidate();
+                    $request->session()->regenerateToken();
+                    
+                    return back()->withErrors([
+                        'email' => 'Your subscription has expired. Please contact STREAMLINE TECH SOLUTION to renew.',
+                    ]);
+                }
+
+                // B. Check if Admin has assigned a currency AND account is active
+                if (empty($manager->currency_symbol) || $manager->is_active == 0) {
+                    Auth::logout();
+                    $request->session()->invalidate();
+                    $request->session()->regenerateToken();
+
+                    return back()->withErrors([
+                        'email' => 'Your account is suspended or waiting for Admin approval/activation.',
+                    ]);
+                }
+
+                // Passed all checks! Let them in.
                 return redirect()->intended('dashboard');
             }
 
-            // 3. IF PENDING (Currency not set by Admin yet)
+            // Failsafe
             Auth::logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
-
-            return back()->withErrors([
-                'email' => 'Your account is waiting for Admin approval/activation.',
-            ]);
+            return back()->withErrors(['email' => 'Invalid account profile. Contact Admin.']);
         }
 
         return back()->withErrors([
@@ -101,8 +126,8 @@ class AuthController extends Controller
                     'support_phone'     => $request->phone_number, 
 
                     // FIX FOR DB ERROR 2: Use empty string instead of NULL.
-                    // The DB likely has "NOT NULL" constraint on this column.
                     'currency_symbol'   => '', 
+                    'is_active'         => 0, // Force inactive initially
                 ]);
             });
 
