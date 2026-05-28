@@ -116,19 +116,21 @@
     </div>
 
     @php
-        // Robust Manager/Company Fetching
-        $manager = $loan->loanManager ?? Auth::user()->getCompany() ?? Auth::user()->loanManager;
+        // THE FIX: Force the system to prioritize the CURRENT logged-in business profile.
+        // This stops the PDF from getting stuck on old data if the loan was migrated or created by a different admin account.
+        $manager = Auth::user()->getCompany() ?? Auth::user()->loanManager ?? $loan->loanManager;
+        
         $client = $loan->client;
         $currency = $manager->currency_symbol ?? 'UGX';
         $interest = $loan->interest_amount ?? ($loan->principal_amount * ($loan->interest_rate / 100));
         $totalDue = $loan->principal_amount + $interest + ($loan->processing_fee ?? 0);
         
-        // Dynamic Company Details mapping from Business Settings
-        $companyName = $manager->company_name ?? optional($manager->user)->name ?? 'STREAMLINE TECH SOLUTION';
-        $companyPhone = $manager->company_phone ?? $manager->phone_number ?? 'N/A';
-        $companyAddress = $manager->company_address ?? $manager->address ?? 'N/A';
-        $companyEmail = $manager->company_email ?? Auth::user()->email;
-        $companyLogo = $manager->company_logo ?? $manager->company_logo_path ?? null;
+        // Strict mapping: Ensure we don't accidentally pull blank database fields
+        $companyName = !empty($manager->company_name) ? $manager->company_name : (optional($manager->user)->name ?? 'STREAMLINE TECH SOLUTION');
+        $companyPhone = !empty($manager->company_phone) ? $manager->company_phone : (!empty($manager->phone_number) ? $manager->phone_number : 'N/A');
+        $companyAddress = !empty($manager->company_address) ? $manager->company_address : (!empty($manager->address) ? $manager->address : 'N/A');
+        $companyEmail = !empty($manager->company_email) ? $manager->company_email : Auth::user()->email;
+        $companyLogo = !empty($manager->company_logo) ? $manager->company_logo : (!empty($manager->company_logo_path) ? $manager->company_logo_path : null);
     @endphp
 
     <div class="header-section">
