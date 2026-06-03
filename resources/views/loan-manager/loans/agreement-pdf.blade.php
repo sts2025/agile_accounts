@@ -90,6 +90,10 @@
             font-weight: bold; 
             font-size: 12px; 
         }
+        .page-break { 
+            page-break-before: always; 
+            break-before: page;
+        }
 
         /* Print Button Styles */
         @media print {
@@ -203,7 +207,7 @@
         <p><em>No collateral details recorded for this loan.</em></p>
     @endif
 
-    <div class="section-header">TERMS AND CONDITIONS</div>
+    <div class="section-header page-break">TERMS AND CONDITIONS</div>
     <p style="font-size: 12px; text-align: justify; margin-bottom: 8px;"><strong>1. AGREEMENT:</strong> This Loan Agreement ("Agreement") is made on {{ \Carbon\Carbon::parse($loan->start_date)->format('F d, Y') }} by and between <strong>{{ $companyName }}</strong> ("Lender") and <strong>{{ $client->name }}</strong> ("Borrower").</p>
     <p style="font-size: 12px; text-align: justify; margin-bottom: 8px;"><strong>2. REPAYMENT:</strong> The Borrower agrees to repay the Total Repayable Amount of <strong>{{ $currency }} {{ number_format($totalDue) }}</strong> in installments as per the agreed-upon schedule.</p>
     <p style="font-size: 12px; text-align: justify; margin-bottom: 8px;"><strong>3. DEFAULT:</strong> Failure to make a payment for more than seven (7) days after the due date will be considered a default. In the event of default, the Lender has the right to demand immediate full payment of the outstanding balance and may seize any collateral listed.</p>
