@@ -59,16 +59,6 @@ Route::post('forgot-password', [PasswordResetController::class, 'sendResetLinkEm
 Route::get('reset-password/{token}', [PasswordResetController::class, 'showResetForm'])->name('password.reset');
 Route::post('reset-password', [PasswordResetController::class, 'reset'])->name('password.update');
 
-// =============================================================
-// TEMPORARY: one-time migration runner for hosts without SSH/CLI
-// access. Gated by a long random secret in the URL so it isn't
-// guessable. DELETE THIS ROUTE once migrations have been run on
-// the live server — do not leave it deployed long-term.
-// =============================================================
-Route::get('/run-migrations-994cef87b1597e3c01f8a079e9c8a1ef96ad14268087ca24', function () {
-    \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
-    return '<pre>' . e(\Illuminate\Support\Facades\Artisan::output()) . '</pre>';
-});
 
 
 // =============================================================
