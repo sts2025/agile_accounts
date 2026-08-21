@@ -15,6 +15,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // --- THIS IS THE MISSING PART CAUSING THE ERROR ---
         $middleware->alias([
             'subscription' => \App\Http\Middleware\CheckSubscription::class,
+            'mfi' => \App\Http\Middleware\CheckMicrofinance::class,
+            'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
         ]);
         
     })

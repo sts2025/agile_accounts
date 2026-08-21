@@ -10,7 +10,13 @@
         <div>
             <h1 class="h3 mb-0 text-dark">
                 Loan #{{ $loan->reference_id ?? str_pad($loan->id, 4, '0', STR_PAD_LEFT) }}
-                @if($loan->status == 'paid')
+                @if($loan->approval_status === 'pending')
+                    <span class="badge bg-warning text-dark" style="font-size: 0.5em; vertical-align: middle;">PENDING APPROVAL</span>
+                @elseif($loan->approval_status === 'approved')
+                    <span class="badge bg-info text-dark" style="font-size: 0.5em; vertical-align: middle;">APPROVED — AWAITING DISBURSEMENT</span>
+                @elseif($loan->approval_status === 'rejected')
+                    <span class="badge bg-dark" style="font-size: 0.5em; vertical-align: middle;">REJECTED</span>
+                @elseif($loan->status == 'paid')
                     <span class="badge bg-success" style="font-size: 0.5em; vertical-align: middle;">PAID</span>
                 @elseif($loan->status == 'defaulted')
                     <span class="badge bg-danger" style="font-size: 0.5em; vertical-align: middle;">DEFAULTED</span>
@@ -20,6 +26,9 @@
             </h1>
             <p class="mb-0 text-muted">
                 Client: <strong>{{ $loan->client->name }}</strong> | Phone: {{ $loan->client->phone_number }}
+                @if($loan->clientGroup)
+                    | Group: <a href="{{ route('client-groups.show', $loan->clientGroup->id) }}"><i class="fas fa-users"></i> {{ $loan->clientGroup->name }}</a>
+                @endif
             </p>
         </div>
         <div>
@@ -37,6 +46,222 @@
         <div class="alert alert-success alert-dismissible fade show shadow-sm">
             <i class="fas fa-check-circle me-2"></i> {{ session('status') }}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    @endif
+
+    {{-- Loan Workflow: Application -> Approval -> Disbursement --}}
+    @if(in_array($loan->approval_status, ['pending', 'approved']) || ($loan->approval_status === 'disbursed' && !$loan->payments->count()))
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <h6 class="mb-1 fw-bold">Loan Workflow</h6>
+                    <span class="text-muted small">
+                        @if($loan->approval_status === 'pending')
+                            Awaiting approval.
+                        @elseif($loan->approval_status === 'approved')
+                            Approved by {{ optional($loan->approvedBy)->name ?? 'manager' }} on {{ optional($loan->approved_at)->format('d M Y') }} — not yet disbursed.
+                        @elseif($loan->approval_status === 'disbursed')
+                            Disbursed — no repayments recorded yet, so this can still be reversed if it was a mistake.
+                        @endif
+                    </span>
+                </div>
+                <div class="d-flex gap-2">
+                    @if($loan->approval_status === 'pending')
+                        <form method="POST" action="{{ route('loans.approve', $loan->id) }}" onsubmit="return confirm('Approve this loan application?');">
+                            @csrf
+                            <button type="submit" class="btn btn-success shadow-sm"><i class="fas fa-check me-1"></i> Approve</button>
+                        </form>
+                        <form method="POST" action="{{ route('loans.reject', $loan->id) }}" onsubmit="return confirm('Reject this application?');">
+                            @csrf
+                            <button type="submit" class="btn btn-outline-danger shadow-sm"><i class="fas fa-times me-1"></i> Reject</button>
+                        </form>
+                    @elseif($loan->approval_status === 'approved')
+                        <form method="POST" action="{{ route('loans.disburse', $loan->id) }}" onsubmit="return confirm('Disburse this loan? This marks it active and releases the funds.');">
+                            @csrf
+                            <button type="submit" class="btn btn-primary shadow-sm"><i class="fas fa-hand-holding-usd me-1"></i> Disburse</button>
+                        </form>
+                    @elseif($loan->approval_status === 'disbursed')
+                        <form method="POST" action="{{ route('loans.reverse-disbursement', $loan->id) }}" onsubmit="return confirm('Reverse this disbursement? The loan goes back to Approved, awaiting disbursement.');">
+                            @csrf
+                            <button type="submit" class="btn btn-outline-warning shadow-sm"><i class="fas fa-undo me-1"></i> Reverse Disbursement</button>
+                        </form>
+                    @endif
+                </div>
+            </div>
+        </div>
+    @endif
+
+    @if($loan->status === 'written_off')
+        <div class="alert alert-secondary shadow-sm border-0 mb-4">
+            <strong><i class="fas fa-file-invoice-dollar me-2"></i> Written off</strong>
+            by {{ optional($loan->writtenOffBy)->name ?? 'a manager' }} on {{ optional($loan->written_off_at)->format('d M Y') }}.
+            @if($loan->write_off_reason)
+                <div class="small text-muted mt-1">Reason: {{ $loan->write_off_reason }}</div>
+            @endif
+        </div>
+    @elseif($loan->approval_status === 'disbursed' && !in_array($loan->status, ['paid', 'written_off']))
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-body d-flex gap-2 flex-wrap">
+                <button class="btn btn-outline-secondary btn-sm shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#rescheduleForm">
+                    <i class="fas fa-calendar-alt me-1"></i> Reschedule / Refinance
+                </button>
+                <button class="btn btn-outline-dark btn-sm shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#writeOffForm">
+                    <i class="fas fa-file-invoice-dollar me-1"></i> Write Off This Loan
+                </button>
+
+                <div class="collapse w-100 mt-3" id="rescheduleForm">
+                    <form method="POST" action="{{ route('loans.reschedule', $loan->id) }}" onsubmit="return confirm('Reschedule this loan with the new terms below? The current terms will be kept on record.');" class="row g-2">
+                        @csrf
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-dark">Interest Rate (%)</label>
+                            <input type="number" step="0.01" name="interest_rate" class="form-control form-control-sm" value="{{ $loan->interest_rate }}" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-dark">Term (Periods)</label>
+                            <input type="number" name="term" class="form-control form-control-sm" value="{{ $loan->term }}" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-dark">Frequency</label>
+                            <select name="repayment_frequency" class="form-select form-select-sm" required>
+                                @foreach(['Monthly', 'Weekly', 'Daily'] as $freq)
+                                    <option value="{{ $freq }}" {{ $loan->repayment_frequency === $freq ? 'selected' : '' }}>{{ $freq }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-dark">New Start Date</label>
+                            <input type="date" name="start_date" class="form-control form-control-sm" value="{{ \Carbon\Carbon::parse($loan->start_date)->format('Y-m-d') }}" required>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label small fw-bold text-dark">Reason <span class="text-secondary fw-normal">(Optional)</span></label>
+                            <input type="text" name="reason" class="form-control form-control-sm" placeholder="e.g. client requested extended term after income disruption">
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-secondary btn-sm">Confirm Reschedule</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="collapse w-100 mt-3" id="writeOffForm">
+                    <form method="POST" action="{{ route('loans.write-off', $loan->id) }}" onsubmit="return confirm('Write off this loan as uncollectable bad debt? This is meant to be final — there is no undo action.');">
+                        @csrf
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold text-dark">Reason <span class="text-secondary fw-normal">(Optional)</span></label>
+                            <textarea name="write_off_reason" class="form-control form-control-sm" rows="2" placeholder="e.g. client deceased, absconded, uncollectable after X months in arrears"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-dark btn-sm">Confirm Write Off</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    @if(in_array($loan->status, ['active', 'defaulted'], true) || $loan->penalties->isNotEmpty())
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 fw-bold text-warning"><i class="fas fa-exclamation-triangle me-2"></i> Penalties</h6>
+                @if(in_array($loan->status, ['active', 'defaulted'], true))
+                    <button class="btn btn-sm btn-outline-warning shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#addPenaltyForm">
+                        <i class="fas fa-plus me-1"></i> Add Penalty
+                    </button>
+                @endif
+            </div>
+            <div class="card-body">
+                @if(in_array($loan->status, ['active', 'defaulted'], true))
+                    <div class="collapse mb-3" id="addPenaltyForm">
+                        <form method="POST" action="{{ route('loans.penalties.store', $loan->id) }}" class="row g-2">
+                            @csrf
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold text-dark">Amount</label>
+                                <input type="number" step="0.01" name="amount" class="form-control form-control-sm" value="{{ $defaultPenaltyAmount > 0 ? $defaultPenaltyAmount : '' }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-bold text-dark">Reason <span class="text-secondary fw-normal">(Optional)</span></label>
+                                <input type="text" name="reason" class="form-control form-control-sm" placeholder="e.g. 15 days late on installment">
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <button type="submit" class="btn btn-warning btn-sm w-100">Add</button>
+                            </div>
+                        </form>
+                    </div>
+                @endif
+
+                @if($loan->penalties->isEmpty())
+                    <p class="text-muted small mb-0">No penalties on this loan.</p>
+                @else
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="text-secondary small text-uppercase">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Amount</th>
+                                    <th>Reason</th>
+                                    <th>Status</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($loan->penalties as $penalty)
+                                    <tr>
+                                        <td class="small">{{ $penalty->created_at->format('d M Y') }}</td>
+                                        <td class="small font-monospace {{ $penalty->is_removed ? 'text-muted text-decoration-line-through' : '' }}">{{ number_format($penalty->amount, 2) }}</td>
+                                        <td class="small text-muted">{{ $penalty->reason ?: '—' }}</td>
+                                        <td class="small">
+                                            @if($penalty->is_removed)
+                                                <span class="badge bg-light text-muted border">Removed</span>
+                                            @else
+                                                <span class="badge bg-warning text-dark">Active</span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            @if(!$penalty->is_removed)
+                                                <form method="POST" action="{{ route('loans.penalties.destroy', [$loan->id, $penalty->id]) }}" onsubmit="return confirm('Remove (waive) this penalty?');">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-sm btn-outline-secondary">Remove</button>
+                                                </form>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </div>
+        </div>
+    @endif
+
+    @if($loan->reschedules->isNotEmpty())
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white py-3">
+                <h6 class="m-0 fw-bold text-secondary"><i class="fas fa-history me-2"></i> Reschedule History</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="bg-light text-secondary small text-uppercase">
+                            <tr>
+                                <th class="ps-4">Date</th>
+                                <th>By</th>
+                                <th>Old Terms</th>
+                                <th>New Terms</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($loan->reschedules as $r)
+                                <tr>
+                                    <td class="ps-4 small">{{ $r->created_at->format('d M Y') }}</td>
+                                    <td class="small">{{ optional($r->rescheduledBy)->name ?? '—' }}</td>
+                                    <td class="small text-muted">{{ $r->old_interest_rate }}% / {{ $r->old_term }} {{ $r->old_repayment_frequency }} / from {{ $r->old_start_date->format('d M Y') }}</td>
+                                    <td class="small">{{ $r->new_interest_rate }}% / {{ $r->new_term }} {{ $r->new_repayment_frequency }} / from {{ $r->new_start_date->format('d M Y') }}</td>
+                                    <td class="small text-muted">{{ $r->reason ?: '—' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     @endif
 

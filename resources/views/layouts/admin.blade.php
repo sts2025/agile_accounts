@@ -55,9 +55,9 @@
             </a>
         </li>
 
-        {{-- Broadcasts (Safely disabled to prevent crashes) --}}
-        <li class="nav-item">
-            <a class="nav-link" href="#">
+        {{-- Broadcasts --}}
+        <li class="nav-item {{ request()->routeIs('admin.broadcasts.*') ? 'active' : '' }}">
+            <a class="nav-link" href="{{ route('admin.broadcasts.index') }}">
                 <i class="fas fa-fw fa-bullhorn"></i>
                 <span>Broadcasts</span>
             </a>

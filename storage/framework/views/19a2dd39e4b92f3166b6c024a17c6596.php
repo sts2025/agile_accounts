@@ -56,8 +56,8 @@
         </li>
 
         
-        <li class="nav-item">
-            <a class="nav-link" href="#">
+        <li class="nav-item <?php echo e(request()->routeIs('admin.broadcasts.*') ? 'active' : ''); ?>">
+            <a class="nav-link" href="<?php echo e(route('admin.broadcasts.index')); ?>">
                 <i class="fas fa-fw fa-bullhorn"></i>
                 <span>Broadcasts</span>
             </a>

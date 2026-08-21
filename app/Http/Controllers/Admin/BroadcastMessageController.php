@@ -52,7 +52,7 @@ class BroadcastMessageController extends Controller
         // Toggle the current one
         $broadcast->update(['is_active' => !$broadcast->is_active]);
 
-        $status = $broadcast->is_is_active ? 'activated' : 'deactivated';
+        $status = $broadcast->is_active ? 'activated' : 'deactivated';
         return back()->with('status', "Message '$broadcast->title' has been $status.");
     }
 

@@ -30,8 +30,8 @@ class AuthController extends Controller
             $request->session()->regenerate();
             $user = Auth::user();
 
-            // 1. ADMIN CHECK (Allow ID 1 or user_type admin)
-            if ($user->id === 1 || $user->user_type === 'admin') {
+            // 1. ADMIN CHECK
+            if ($user->isAdmin()) {
                 session()->forget('original_admin_id');
                 return redirect()->route('admin.dashboard');
             }

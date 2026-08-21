@@ -20,19 +20,54 @@ $currency = optional(auth()->user()->manager)->currency_symbol ?? 'UGX';
                 @csrf
                 
                 {{-- LOAN DETAILS SECTION --}}
+                @if($clientGroups->isNotEmpty())
+                <div class="form-group mb-3">
+                    <label for="client_group_id">Client Group <span class="text-muted small">(Optional — for group/joint-liability loans)</span></label>
+                    <select class="form-control" id="client_group_id" name="client_group_id">
+                        <option value="">-- Not a group loan --</option>
+                        @foreach ($clientGroups as $group)
+                            <option value="{{ $group->id }}"
+                                data-members="{{ $group->members->pluck('id')->implode(',') }}"
+                                {{ (old('client_group_id', $selectedGroupId) == $group->id) ? 'selected' : '' }}>
+                                {{ $group->name }} ({{ $group->members->count() }} members)
+                            </option>
+                        @endforeach
+                    </select>
+                    <small class="text-muted d-block mt-1">Selecting a group will filter the client list below to its members. Choose the member who will sign as the representative/borrower of record.</small>
+                    @error('client_group_id') <div class="text-danger small">{{ $message }}</div> @enderror
+                </div>
+                @endif
+
                 <div class="form-group mb-3">
                     <label for="client_id">Select Client <span class="text-danger">*</span></label>
                     <select class="form-control" id="client_id" name="client_id" required>
                         <option value="">-- Please choose a client --</option>
                         @foreach ($clients as $client)
-                            <option value="{{ $client->id }}" {{ old('client_id') == $client->id ? 'selected' : '' }}>
-                                {{ $client->name }} ({{ $client->phone ?? 'N/A' }})
+                            <option value="{{ $client->id }}" {{ old('client_id') == $client->id ? 'selected' : '' }} {{ $client->is_blacklisted ? 'disabled' : '' }}>
+                                {{ $client->name }} ({{ $client->phone ?? 'N/A' }}){{ $client->is_blacklisted ? ' — BLACKLISTED' : '' }}
                             </option>
                         @endforeach
                     </select>
                     @error('client_id') <div class="text-danger small">{{ $message }}</div> @enderror
                 </div>
-                
+
+                @if($loanProducts->isNotEmpty())
+                <div class="form-group mb-3">
+                    <label for="mfi_loan_product_id">Loan Product</label>
+                    <select class="form-control" id="mfi_loan_product_id" name="mfi_loan_product_id">
+                        @foreach ($loanProducts as $product)
+                            <option value="{{ $product->id }}" {{ old('mfi_loan_product_id') == $product->id ? 'selected' : '' }}>
+                                {{ $product->name }} — {{ number_format($product->collateral_ratio * 100, 0) }}% savings collateral required
+                            </option>
+                        @endforeach
+                    </select>
+                    <small class="text-muted d-block mt-1">
+                        <a href="{{ route('mfi.products.index') }}">Manage loan products</a>
+                    </small>
+                    @error('mfi_loan_product_id') <div class="text-danger small">{{ $message }}</div> @enderror
+                </div>
+                @endif
+
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         {{-- FIX: Using dynamic $currency --}}
@@ -128,7 +163,7 @@ $currency = optional(auth()->user()->manager)->currency_symbol ?? 'UGX';
                 <div class="mt-4">
                     <button type="submit" class="btn btn-primary btn-icon-split">
                         <span class="icon text-white-50"><i class="fas fa-save"></i></span>
-                        <span class="text">Save New Loan</span>
+                        <span class="text">Submit Loan Application</span>
                     </button>
                     <a href="{{ route('loans.index') }}" class="btn btn-secondary">Cancel</a>
                 </div>
@@ -136,4 +171,44 @@ $currency = optional(auth()->user()->manager)->currency_symbol ?? 'UGX';
         </div>
     </div>
 </div>
+
+@if($clientGroups->isNotEmpty())
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var groupSelect = document.getElementById('client_group_id');
+    var clientSelect = document.getElementById('client_id');
+    if (!groupSelect || !clientSelect) return;
+
+    var allOptions = Array.prototype.slice.call(clientSelect.options);
+
+    function applyGroupFilter() {
+        var selected = groupSelect.options[groupSelect.selectedIndex];
+        var memberIds = selected && selected.value
+            ? selected.getAttribute('data-members').split(',').filter(Boolean)
+            : null;
+
+        var currentValue = clientSelect.value;
+        clientSelect.innerHTML = '';
+
+        allOptions.forEach(function (opt) {
+            if (!memberIds || opt.value === '' || memberIds.indexOf(opt.value) !== -1) {
+                clientSelect.appendChild(opt.cloneNode(true));
+            }
+        });
+
+        // Keep the previous selection if it's still valid for this group.
+        if (memberIds && memberIds.indexOf(currentValue) !== -1) {
+            clientSelect.value = currentValue;
+        }
+    }
+
+    groupSelect.addEventListener('change', applyGroupFilter);
+
+    // Apply on load in case a group came pre-selected (e.g. via "Issue Group Loan").
+    if (groupSelect.value) {
+        applyGroupFilter();
+    }
+});
+</script>
+@endif
 @endsection

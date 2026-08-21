@@ -7,6 +7,7 @@ use App\Models\Loan;
 use App\Models\Payment;
 use App\Models\CashTransaction;
 use App\Models\LoanManager;
+use App\Models\MfiTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
@@ -40,6 +41,17 @@ class ReportController extends Controller
         $cashInflows = $manager->cashTransactions()->where('type', 'inflow')->whereDate('transaction_date', $reportDate)->get();
         $cashOutflows = $manager->cashTransactions()->where('type', 'outflow')->whereDate('transaction_date', $reportDate)->get();
 
+        // Today's savings cash movement — needed alongside loan disbursements/
+        // repayments for the manager to reconcile actual cash in the drawer.
+        $savingsDeposited = MfiTransaction::where('loan_manager_id', $manager->id)
+            ->where('transaction_type', 'deposit')
+            ->whereDate('transaction_date', $reportDate)
+            ->sum('credit');
+        $savingsWithdrawn = MfiTransaction::where('loan_manager_id', $manager->id)
+            ->where('transaction_type', 'withdrawal')
+            ->whereDate('transaction_date', $reportDate)
+            ->sum('debit');
+
         $summary = [
             'total_loaned_principal' => $loansGiven->sum('principal_amount'),
             'total_processing_fees' => $loansGiven->sum('processing_fee'),
@@ -47,7 +59,9 @@ class ReportController extends Controller
             'total_other_inflows' => $cashInflows->sum('amount'),
             'total_expenses_outflows' => $cashOutflows->sum('amount'),
             'count_loans_given' => $loansGiven->count(),
-            'count_payments_received' => $paymentsReceived->count()
+            'count_payments_received' => $paymentsReceived->count(),
+            'total_savings_deposited' => $savingsDeposited,
+            'total_savings_withdrawn' => $savingsWithdrawn,
         ];
 
         return [
@@ -140,7 +154,21 @@ class ReportController extends Controller
                 return (object)['name' => $name ?: 'General Expenses', 'period_total' => $group->sum('amount')];
             })->values();
 
-        $expenseAccounts = $categorizedExpenses->concat($otherExpenses);
+        // 3. Interest Expense (Savings) — non-cash: interest posted to client
+        // savings accounts via the End-of-Period run. This is a real cost of
+        // holding client deposits, and offsets the corresponding non-cash
+        // increase to the Client Savings liability on the Balance Sheet so
+        // the books stay balanced without any cash actually moving.
+        $interestExpense = MfiTransaction::where('loan_manager_id', $manager->id)
+            ->where('transaction_type', 'interest')
+            ->whereBetween('transaction_date', [$startDate, $endDate])
+            ->sum('credit');
+
+        $interestExpenseAccounts = $interestExpense > 0
+            ? collect([(object)['name' => 'Interest Expense (Savings)', 'period_total' => $interestExpense]])
+            : collect([]);
+
+        $expenseAccounts = $categorizedExpenses->concat($otherExpenses)->concat($interestExpenseAccounts);
 
         // --- TOTALS ---
         $totalIncome = $incomeAccounts->sum('period_total');
@@ -177,34 +205,85 @@ class ReportController extends Controller
         $reportDate = $request->input('report_date', now()->toDateString());
 
         // --- 1. ASSETS ---
-        $activeLoans = $manager->loans()
-            ->where('status', 'active')
+        // Loan Portfolio: the outstanding PRINCIPAL balance only (principal
+        // disbursed minus principal actually repaid). This used to be
+        // computed as "total repayable" (principal + full-term interest)
+        // minus total cash paid, which baked uncollected, unearned interest
+        // into the asset figure with no matching entry on the equity side
+        // (interest income is recognised below on a cash basis — only when
+        // actually paid). That mismatch was the single biggest cause of the
+        // "Balancing Adjustment" plug on this report.
+        //
+        // Defaulted loans keep their remaining principal on the books too,
+        // shown separately as Non-Performing Loans, rather than silently
+        // vanishing from assets: the cash was genuinely disbursed and the
+        // debt still legally exists until the manager formally writes it
+        // off (a distinct action, not built yet).
+        $openLoans = $manager->loans()
+            ->whereIn('status', ['active', 'defaulted'])
             ->where('start_date', '<=', $reportDate)
             ->get();
-            
-        $outstandingPrincipal = 0;
-        foreach($activeLoans as $loan) {
-            $totalDue = $loan->principal_amount + ($loan->principal_amount * ($loan->interest_rate / 100));
-            $paid = $loan->payments()->where('payment_date', '<=', $reportDate)->sum('amount_paid');
-            $outstandingPrincipal += max(0, $totalDue - $paid);
+
+        $performingPrincipal = 0;
+        $nonPerformingPrincipal = 0;
+        foreach ($openLoans as $loan) {
+            $principalPaid = $loan->payments()->where('payment_date', '<=', $reportDate)->sum('principal_paid');
+            $remaining = max(0, $loan->principal_amount - $principalPaid);
+
+            if ($loan->status === 'defaulted') {
+                $nonPerformingPrincipal += $remaining;
+            } else {
+                $performingPrincipal += $remaining;
+            }
         }
 
         // B. Cash Logic
         $loansPaid = $manager->payments()->where('payment_date', '<=', $reportDate)->sum('amount_paid');
         $otherInflows = $manager->cashTransactions()->where('type', 'inflow')->where('transaction_date', '<=', $reportDate)->sum('amount');
         $bankWithdrawals = $manager->bankTransactions()->where('type', 'Withdrawal')->where('deposit_date', '<=', $reportDate)->sum('amount');
-        
+        // Processing fees are collected in cash at disbursement, separately
+        // from the principal, and are already counted as income in the P&L
+        // below — but the matching cash inflow was missing here, so every
+        // fee-charging loan permanently threw the books off by exactly the
+        // fee amount.
+        $feesCollected = $manager->loans()->where('start_date', '<=', $reportDate)->sum('processing_fee');
+
         $loansGiven = $manager->loans()->where('start_date', '<=', $reportDate)->sum('principal_amount');
         $expensesPaid = $manager->expenses()->where('expense_date', '<=', $reportDate)->sum('amount');
         $otherOutflows = $manager->cashTransactions()->where('type', 'outflow')->where('transaction_date', '<=', $reportDate)->sum('amount');
         $bankDeposits = $manager->bankTransactions()->where('type', 'Deposit')->where('deposit_date', '<=', $reportDate)->sum('amount');
 
+        // MFI savings mobilization: a client depositing into savings is real
+        // cash arriving in the till (matched by the "Client Savings" liability
+        // below), and a withdrawal is real cash leaving. Neither is income or
+        // expense — this only affects the Cash and Liabilities lines.
+        $mfiSavingsIn = MfiTransaction::where('loan_manager_id', $manager->id)
+            ->where('transaction_type', 'deposit')
+            ->where('transaction_date', '<=', $reportDate)
+            ->sum('credit');
+        $mfiSavingsOut = MfiTransaction::where('loan_manager_id', $manager->id)
+            ->where('transaction_type', 'withdrawal')
+            ->where('transaction_date', '<=', $reportDate)
+            ->sum('debit');
+
+        // Interest posted to client savings (End of Period run) is NOT cash
+        // — it's a non-cash increase to what the business owes its savers,
+        // offset below by an Interest Expense line in the P&L so the books
+        // stay balanced without any cash actually moving.
+        $mfiInterestCredited = MfiTransaction::where('loan_manager_id', $manager->id)
+            ->where('transaction_type', 'interest')
+            ->where('transaction_date', '<=', $reportDate)
+            ->sum('credit');
+
         $openingBalance = $manager->opening_balance ?? 0;
-        $cashOnHand = $openingBalance + ($loansPaid + $otherInflows + $bankWithdrawals) - ($loansGiven + $expensesPaid + $otherOutflows + $bankDeposits);
+        $cashOnHand = $openingBalance
+            + ($loansPaid + $otherInflows + $bankWithdrawals + $mfiSavingsIn + $feesCollected)
+            - ($loansGiven + $expensesPaid + $otherOutflows + $bankDeposits + $mfiSavingsOut);
         $cashAtBank = $bankDeposits - $bankWithdrawals;
 
         $assets = collect([
-            (object)['name' => 'Principal Amount (Loan Portfolio)', 'balance' => $outstandingPrincipal],
+            (object)['name' => 'Loan Portfolio (Active)', 'balance' => $performingPrincipal],
+            (object)['name' => 'Non-Performing Loans (Defaulted)', 'balance' => $nonPerformingPrincipal],
             (object)['name' => 'Cash At Hand', 'balance' => $cashOnHand],
             (object)['name' => 'Cash at Bank', 'balance' => $cashAtBank],
             (object)['name' => 'Receivables', 'balance' => 0],
@@ -213,18 +292,28 @@ class ReportController extends Controller
 
 
         // --- 2. LIABILITIES ---
+        // Legacy manual workaround: managers who logged savings-like activity
+        // as generic cash transactions before the MFI module existed. Kept
+        // as-is so existing historical data isn't dropped from the report.
         $savings = $manager->cashTransactions()
             ->where('type', 'inflow')
             ->where('description', 'like', '%Savings%')
             ->where('transaction_date', '<=', $reportDate)
             ->sum('amount');
-            
+
+        // Real MFI client savings liability: what the business owes back to
+        // clients, computed from the actual savings ledger rather than a
+        // description search. Includes interest credited (non-cash) as well
+        // as cash deposits/withdrawals — the client's balance grew either way.
+        $mfiClientSavings = $mfiSavingsIn + $mfiInterestCredited - $mfiSavingsOut;
+
         $payables = 0;
 
         $liabilities = collect([
             (object)['name' => 'Savings', 'balance' => $savings],
+            (object)['name' => 'Client Savings (MFI)', 'balance' => $mfiClientSavings],
             (object)['name' => 'Payings (Payables)', 'balance' => $payables],
-        ]); 
+        ]);
         $totalLiabilities = $liabilities->sum('balance');
 
 
@@ -312,6 +401,28 @@ class ReportController extends Controller
                 'description' => "Expense: " . ($exp->category->name ?? 'Misc'),
                 'amount_out' => $exp->amount,
                 'amount_in' => 0,
+            ]);
+        }
+
+        // 5. MFI Savings (deposits/withdrawals/interest postings)
+        $mfiTxs = MfiTransaction::where('loan_manager_id', $manager->id)
+            ->whereIn('transaction_type', ['deposit', 'withdrawal', 'interest'])
+            ->whereBetween('transaction_date', [$startDate, $endDate])
+            ->with('account.client')
+            ->get();
+        foreach ($mfiTxs as $tx) {
+            $clientName = optional(optional($tx->account)->client)->name ?? 'Unknown Client';
+            $label = match ($tx->transaction_type) {
+                'deposit' => 'Savings Deposit: ',
+                'withdrawal' => 'Savings Withdrawal: ',
+                'interest' => 'Savings Interest Posted: ',
+                default => ucfirst($tx->transaction_type) . ': ',
+            };
+            $masterTransactionList->push((object)[
+                'date' => $tx->transaction_date,
+                'description' => $label . $clientName,
+                'amount_out' => $tx->transaction_type === 'withdrawal' ? $tx->amount : 0,
+                'amount_in' => $tx->transaction_type !== 'withdrawal' ? $tx->amount : 0,
             ]);
         }
 

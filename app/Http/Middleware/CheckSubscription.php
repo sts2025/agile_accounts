@@ -18,7 +18,7 @@ class CheckSubscription
         $user = Auth::user();
 
         // 1. ADMIN BYPASS: Admins and impersonating Admins are never locked out
-        if ($user->user_type === 'admin' || session()->has('original_admin_id')) {
+        if ($user->isAdmin() || session()->has('original_admin_id')) {
             return $next($request);
         }
 

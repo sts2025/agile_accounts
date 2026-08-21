@@ -47,7 +47,7 @@
                 </div>
 
                 <div class="dropdown no-arrow">
-                    <a href="#" class="btn btn-sm btn-primary shadow-sm">
+                    <a href="<?php echo e(route('admin.broadcasts.index')); ?>" class="btn btn-sm btn-primary shadow-sm">
                         <i class="fas fa-bullhorn fa-sm text-white-50"></i> Broadcast
                     </a>
                 </div>

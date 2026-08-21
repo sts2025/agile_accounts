@@ -36,17 +36,27 @@ class User extends Authenticatable
 
     /**
      * Strict Gatekeeper for Admin Panel.
-     * This ensures ONLY the Super Admin can pass.
-     * * Logic:
-     * 1. Must be type 'admin'
-     * 2. Cannot be a Cashier (role check)
-     * 3. Cannot belong to another company (loan_manager_id check)
+     *
+     * A cashier can never be an admin, full stop — they're always someone
+     * else's tenant employee. Beyond that, this app has ended up with two
+     * legitimate ways an account is recognized as a platform admin (both
+     * predate this check and are relied on elsewhere in the codebase):
+     *   1. user_type of 'admin' or 'super_admin' (both values exist in the
+     *      live users table).
+     *   2. User #1 — the original owner/developer account, long treated as
+     *      admin by convention (see AuthController::login()'s
+     *      `$user->id === 1` special case).
+     * Narrowing this to just user_type === 'admin' (as an earlier version
+     * of this method did) silently locks out both of those.
      */
     public function isAdmin()
     {
-        return $this->user_type === 'admin' 
-            && $this->role !== 'cashier'
-            && is_null($this->loan_manager_id);
+        if ($this->role === 'cashier') {
+            return false;
+        }
+
+        return $this->id === 1
+            || in_array($this->user_type, ['admin', 'super_admin'], true);
     }
     
     /**

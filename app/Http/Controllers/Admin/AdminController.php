@@ -158,16 +158,24 @@ class AdminController extends Controller
     }
 
     /**
-     * Return back to Admin account.
+     * Return back to Admin account. Reachable while impersonating a
+     * non-admin user (see routes/web.php), so this only trusts the
+     * server-side session value set by impersonate() above — never
+     * user-supplied input — and re-verifies the stashed id is still a
+     * real admin before logging back in as them.
      */
     public function stopImpersonate()
     {
         $adminId = session()->get('original_admin_id');
-        if ($adminId) {
-            $admin = User::find($adminId);
+        $admin = $adminId ? User::find($adminId) : null;
+
+        if ($admin && $admin->isAdmin()) {
             Auth::login($admin);
             session()->forget('original_admin_id');
+            return redirect()->route('admin.dashboard');
         }
-        return redirect()->route('admin.dashboard');
+
+        session()->forget('original_admin_id');
+        return redirect()->route('dashboard');
     }
 }

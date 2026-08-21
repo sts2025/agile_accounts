@@ -96,7 +96,14 @@
                     </ul>
                 </div>
             </li>
+
             
+            <li class="nav-item">
+                <a class="nav-link <?php echo e(request()->routeIs('client-groups.*') ? 'active' : ''); ?>" href="<?php echo e(route('client-groups.index')); ?>">
+                    <i class="bi bi-diagram-3-fill me-2"></i> Client Groups
+                </a>
+            </li>
+
             
             <li class="nav-item"> 
                 <a class="nav-link collapsed" href="#loans-submenu" data-bs-toggle="collapse"> 
@@ -118,18 +125,26 @@
             
             
             
-            <div class="sidebar-sub-header" style="color: #f1c40f;"><i class="fas fa-crown me-1"></i> Microfinance Hub</div>
-            <li class="nav-item">
-                <a class="nav-link collapsed" href="#mfi-submenu" data-bs-toggle="collapse" style="color: #f1c40f;"> 
-                    <i class="fas fa-piggy-bank me-2"></i> Savings Accounts 
-                </a>
-                <div class="collapse <?php echo e(request()->routeIs('mfi.savings.*') ? 'show' : ''); ?>" id="mfi-submenu">
-                    <ul class="nav flex-column ms-2">
-                        <li class="nav-item"><a class="nav-link <?php echo e(request()->routeIs('mfi.savings.index') ? 'active' : ''); ?>" href="<?php echo e(route('mfi.savings.index')); ?>">All Accounts</a></li>
-                        <li class="nav-item"><a class="nav-link <?php echo e(request()->routeIs('mfi.savings.create') ? 'active' : ''); ?>" href="<?php echo e(route('mfi.savings.create')); ?>">Open New Account</a></li>
-                    </ul>
-                </div>
-            </li>
+            <?php $isMfi = optional(Auth::user()->getCompany())->is_mfi ?? false; ?>
+            <?php if($isMfi): ?>
+                <div class="sidebar-sub-header" style="color: #f1c40f;"><i class="fas fa-crown me-1"></i> Microfinance Hub</div>
+                <li class="nav-item">
+                    <a class="nav-link collapsed" href="#mfi-submenu" data-bs-toggle="collapse" style="color: #f1c40f;">
+                        <i class="fas fa-piggy-bank me-2"></i> Savings Accounts
+                    </a>
+                    <div class="collapse <?php echo e(request()->routeIs('mfi.savings.*', 'mfi.products.*', 'mfi.shares.*', 'mfi.dividends.*', 'mfi.fixed-deposits.*', 'mfi.end-of-period.*') ? 'show' : ''); ?>" id="mfi-submenu">
+                        <ul class="nav flex-column ms-2">
+                            <li class="nav-item"><a class="nav-link <?php echo e(request()->routeIs('mfi.savings.index') ? 'active' : ''); ?>" href="<?php echo e(route('mfi.savings.index')); ?>">All Accounts</a></li>
+                            <li class="nav-item"><a class="nav-link <?php echo e(request()->routeIs('mfi.savings.create') ? 'active' : ''); ?>" href="<?php echo e(route('mfi.savings.create')); ?>">Open New Account</a></li>
+                            <li class="nav-item"><a class="nav-link <?php echo e(request()->routeIs('mfi.fixed-deposits.*') ? 'active' : ''); ?>" href="<?php echo e(route('mfi.fixed-deposits.index')); ?>">Fixed Deposits</a></li>
+                            <li class="nav-item"><a class="nav-link <?php echo e(request()->routeIs('mfi.shares.*') ? 'active' : ''); ?>" href="<?php echo e(route('mfi.shares.index')); ?>">Shares</a></li>
+                            <li class="nav-item"><a class="nav-link <?php echo e(request()->routeIs('mfi.dividends.*') ? 'active' : ''); ?>" href="<?php echo e(route('mfi.dividends.create')); ?>">Declare Dividend</a></li>
+                            <li class="nav-item"><a class="nav-link <?php echo e(request()->routeIs('mfi.end-of-period.*') ? 'active' : ''); ?>" href="<?php echo e(route('mfi.end-of-period.index')); ?>">End of Period</a></li>
+                            <li class="nav-item"><a class="nav-link <?php echo e(request()->routeIs('mfi.products.*') ? 'active' : ''); ?>" href="<?php echo e(route('mfi.products.index')); ?>">Product Settings</a></li>
+                        </ul>
+                    </div>
+                </li>
+            <?php endif; ?>
             
             
             

@@ -42,7 +42,12 @@
                     <tbody>
                         @forelse($accounts as $account)
                         <tr>
-                            <td class="ps-4 fw-bold font-monospace text-primary">{{ $account->account_number }}</td>
+                            <td class="ps-4 fw-bold font-monospace text-primary">
+                                {{ $account->account_number }}
+                                @if($account->nickname)
+                                    <br><span class="text-muted small fw-normal font-monospace">{{ $account->nickname }}</span>
+                                @endif
+                            </td>
                             <td class="fw-bold text-dark">{{ $account->client->name ?? 'Unknown Client' }}</td>
                             <td class="text-muted small">{{ $account->client->phone_number ?? 'N/A' }}</td>
                             <td class="text-end text-success fw-bold font-monospace bg-light fs-5">

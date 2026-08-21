@@ -58,10 +58,35 @@
                     </small>
                 </div>
 
-                {{-- Account Type (Standard) --}}
+                {{-- Account Type / Product --}}
                 <div class="mb-4">
                     <label class="form-label fw-bold text-dark">Account Type</label>
-                    <input type="text" class="form-control bg-white shadow-sm fw-bold text-success" value="Standard Savings Account" readonly>
+                    @if($products->isNotEmpty())
+                        <select name="mfi_product_id" class="form-select shadow-sm">
+                            @foreach($products as $product)
+                                <option value="{{ $product->id }}" {{ old('mfi_product_id') == $product->id ? 'selected' : '' }}>
+                                    {{ $product->name }}
+                                    @if($product->is_compulsory) (Compulsory) @endif
+                                    @if($product->minimum_balance > 0) — min balance {{ number_format($product->minimum_balance) }} @endif
+                                </option>
+                            @endforeach
+                        </select>
+                        <small class="text-muted mt-2 d-block">
+                            <a href="{{ route('mfi.products.index') }}">Manage savings products</a>
+                        </small>
+                    @else
+                        <input type="text" class="form-control bg-white shadow-sm fw-bold text-success" value="Standard Savings Account" readonly>
+                        <small class="text-muted mt-2 d-block">
+                            No custom savings products configured yet. <a href="{{ route('mfi.products.create', ['type' => 'savings']) }}">Set one up</a> to control interest, minimum balance, etc.
+                        </small>
+                    @endif
+                </div>
+
+                {{-- Nickname: lets a client hold more than one savings account distinctly --}}
+                <div class="mb-4">
+                    <label class="form-label fw-bold text-dark">Account Nickname <span class="text-secondary fw-normal">(Optional)</span></label>
+                    <input type="text" name="nickname" class="form-control shadow-sm" value="{{ old('nickname') }}" placeholder="e.g. School Fees, Main Savings">
+                    <small class="text-muted mt-2 d-block">Useful if this client will have more than one savings account.</small>
                 </div>
 
                 {{-- Opening Deposit --}}

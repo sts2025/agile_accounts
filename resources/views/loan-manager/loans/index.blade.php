@@ -81,7 +81,13 @@
                                     <span class="badge badge-light border text-dark" style="font-size: 0.75rem; margin-left: 8px;">
                                         Loan #{{ $loan->id }}
                                     </span>
-                                    
+
+                                    @if($loan->clientGroup)
+                                        <span class="badge bg-info text-dark" style="font-size: 0.75rem; margin-left: 4px;" title="Group Loan">
+                                            <i class="fas fa-users"></i> {{ $loan->clientGroup->name }}
+                                        </span>
+                                    @endif
+
                                     <br>
                                     <small class="text-muted">{{ $loan->client->phone_number ?? '' }}</small>
                                 </td>
@@ -100,16 +106,24 @@
                                     {{ number_format($balance) }} <small>{{ $currency }}</small>
                                 </td>
 
-                                {{-- NEW: Status Column shows Yellow Badge if Pending --}}
+                                {{-- Status column: three pre-disbursement states get a plain badge
+                                     (nothing to toggle yet); only a disbursed loan gets the
+                                     active<->paid toggle button. --}}
                                 <td>
                                     @if($loan->approval_status === 'pending')
-                                        <span class="badge bg-warning text-dark px-3 py-2 rounded-pill">Pending</span>
+                                        <span class="badge bg-warning text-dark px-3 py-2 rounded-pill">Pending Approval</span>
+                                    @elseif($loan->approval_status === 'approved')
+                                        <span class="badge bg-info text-dark px-3 py-2 rounded-pill">Approved</span>
+                                    @elseif($loan->approval_status === 'rejected')
+                                        <span class="badge bg-dark px-3 py-2 rounded-pill">Rejected</span>
+                                    @elseif($loan->status === 'written_off')
+                                        <span class="badge bg-dark px-3 py-2 rounded-pill"><i class="fas fa-file-invoice-dollar me-1"></i> Written Off</span>
                                     @else
                                         <form action="{{ route('loans.update-status', $loan->id) }}" method="POST" class="d-inline status-form" data-loan-id="{{ $loan->id }}">
                                             @csrf
                                             @method('PATCH')
                                             <input type="hidden" name="new_status" value="{{ $loan->status == 'active' ? 'paid' : 'active' }}">
-                                            
+
                                             @php
                                                 $btnClass = match($loan->status) {
                                                     'active' => 'btn-primary',
@@ -119,9 +133,9 @@
                                                     default => 'btn-secondary'
                                                 };
                                             @endphp
-                                            
-                                            <button type="submit" 
-                                                    class="btn btn-sm text-white rounded-pill loan-status-btn {{ $btnClass }}" 
+
+                                            <button type="submit"
+                                                    class="btn btn-sm text-white rounded-pill loan-status-btn {{ $btnClass }}"
                                                     data-current-status="{{ $loan->status }}"
                                                     id="status-btn-{{ $loan->id }}"
                                                     style="min-width: 80px;">
@@ -133,18 +147,22 @@
 
                                 <td>
                                     <div class="btn-group btn-group-sm">
-                                        {{-- NEW: Approve / Reject Buttons --}}
                                         @if($loan->approval_status === 'pending')
                                             <form method="POST" action="{{ route('loans.approve', $loan->id) }}" style="display:inline;">
                                                 @csrf
-                                                <button type="submit" class="btn btn-success" onclick="return confirm('Approve this loan and DISBURSE funds?');" title="Approve"><i class="fas fa-check"></i></button>
+                                                <button type="submit" class="btn btn-success" onclick="return confirm('Approve this loan application? It will still need to be disbursed separately.');" title="Approve"><i class="fas fa-check"></i></button>
                                             </form>
                                             <form method="POST" action="{{ route('loans.reject', $loan->id) }}" style="display:inline;">
                                                 @csrf
                                                 <button type="submit" class="btn btn-danger" onclick="return confirm('Reject this application?');" title="Reject"><i class="fas fa-times"></i></button>
                                             </form>
+                                        @elseif($loan->approval_status === 'approved')
+                                            <form method="POST" action="{{ route('loans.disburse', $loan->id) }}" style="display:inline;">
+                                                @csrf
+                                                <button type="submit" class="btn btn-primary" onclick="return confirm('Disburse this loan? This marks it active and releases the funds.');" title="Disburse"><i class="fas fa-hand-holding-usd"></i></button>
+                                            </form>
                                         @endif
-                                        
+
                                         <a href="{{ route('loans.show', $loan->id) }}" class="btn btn-info text-white" title="View"><i class="fas fa-eye"></i></a>
                                         <a href="{{ route('loans.edit', $loan->id) }}" class="btn btn-secondary" title="Edit"><i class="fas fa-edit"></i></a>
                                     </div>
@@ -211,7 +229,11 @@
                     body: JSON.stringify({ new_status: newStatus })
                 })
                 .then(response => {
-                    if (!response.ok) throw new Error('Failed to update');
+                    if (!response.ok) {
+                        return response.json()
+                            .catch(() => ({}))
+                            .then(data => { throw new Error(data.message || 'Failed to update'); });
+                    }
                     return response.json();
                 })
                 .then(data => {
@@ -239,7 +261,7 @@
                     console.error(error);
                     button.textContent = originalText;
                     button.disabled = false;
-                    displayMessage('Error updating status.', 'danger');
+                    displayMessage(error.message || 'Error updating status.', 'danger');
                 });
             });
         });

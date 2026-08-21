@@ -120,7 +120,9 @@ $currency = \App\Models\LoanManager::getCurrency();
                     <h4 class="text-end fw-bold">{{ $currency }} {{ number_format($totalLiabilitiesAndEquity, 0) }}</h4>
                     @if(abs($totalAssets - $totalLiabilitiesAndEquity) > 0.01)
                         <p class="text-end text-danger fw-bold mt-2">
-                            Note: Assets ({{ $currency }} {{ number_format($totalAssets, 0) }}) do not equal L+E. This is due to missing Opening Balances.
+                            Note: Assets ({{ $currency }} {{ number_format($totalAssets, 0) }}) do not equal Liabilities + Equity.
+                            A "Balancing Adjustment" line has been added to Equity to show the gap — check for unusual data
+                            (e.g. an incorrect Opening Balance, or a manually edited transaction) around this report date.
                         </p>
                     @else
                           <p class="text-end text-success fw-bold mt-2">

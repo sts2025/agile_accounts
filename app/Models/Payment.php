@@ -12,6 +12,7 @@ class Payment extends Model
     // --- THE FIX: ADDED PRINCIPAL AND INTEREST TO FILLABLE ---
     protected $fillable = [
         'loan_id',
+        'journal_entry_id',
         'payment_date',
         'amount_paid',      // This will now hold the TOTAL (Principal + Interest)
         'principal_paid',   // Split breakdown 1
@@ -33,5 +34,10 @@ class Payment extends Model
     public function loan()
     {
         return $this->belongsTo(Loan::class);
+    }
+
+    public function journalEntry()
+    {
+        return $this->belongsTo(JournalEntry::class);
     }
 }

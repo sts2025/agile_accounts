@@ -20,7 +20,8 @@ class GuarantorController extends Controller
             // Security check: ensure the loan exists and belongs to the current manager
             'loan_id' => [
                 'required',
-                Rule::exists('loans', 'id')->where('loan_manager_id', Auth::id())
+                // loans.loan_manager_id stores loan_managers.id, not the auth user's id.
+                Rule::exists('loans', 'id')->where('loan_manager_id', Auth::user()->loanManager->id)
             ],
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',

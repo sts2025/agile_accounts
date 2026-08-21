@@ -106,16 +106,27 @@
                     
                     <div class="mb-3">
                         <label class="form-label fw-bold small text-muted">Select Loan</label>
-                        <select name="loan_id" class="form-select shadow-sm" required>
+                        <select name="loan_id" id="loanSelect" class="form-select shadow-sm" required
+                                onchange="onLoanChange()">
                             <option value="" disabled selected>Choose client loan...</option>
                             @foreach($loans as $loan)
-                                <option value="{{ $loan->id }}">
-                                    {{ $loan->client->name }} 
+                                <option value="{{ $loan->id }}"
+                                    @if($isMfi) data-savings-available="{{ $loan->savings_available ?? '' }}" @endif>
+                                    {{ $loan->client->name }}
                                     (Bal: {{ number_format($loan->principal_amount + ($loan->principal_amount * ($loan->interest_rate/100)) - $loan->payments->sum('amount_paid')) }})
                                 </option>
                             @endforeach
                         </select>
                     </div>
+
+                    @if($isMfi)
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" name="pay_from_savings" value="1" id="payFromSavings"
+                                   onchange="onPayFromSavingsToggle()">
+                            <label class="form-check-label fw-bold" for="payFromSavings">Pay from client's Savings Wallet</label>
+                            <small class="d-block text-muted" id="savingsHint">Select a loan to see the client's available savings balance.</small>
+                        </div>
+                    @endif
 
                     <div class="row g-2 mb-3">
                         <div class="col-6">
@@ -124,7 +135,7 @@
                         </div>
                         <div class="col-6">
                             <label class="form-label fw-bold small text-muted">Method</label>
-                            <select name="payment_method" class="form-select shadow-sm">
+                            <select name="payment_method" id="paymentMethod" class="form-select shadow-sm">
                                 <option value="Cash">Cash</option>
                                 <option value="Bank Transfer">Bank Transfer</option>
                                 <option value="Mobile Money">Mobile Money</option>
@@ -176,6 +187,38 @@
         let principal = parseFloat(document.getElementById('inputPrincipal').value) || 0;
         let interest = parseFloat(document.getElementById('inputInterest').value) || 0;
         document.getElementById('displayTotal').innerText = (principal + interest).toLocaleString(undefined, {minimumFractionDigits: 2});
+    }
+
+    function onLoanChange() {
+        const hint = document.getElementById('savingsHint');
+        if (!hint) return;
+
+        const select = document.getElementById('loanSelect');
+        const option = select.options[select.selectedIndex];
+        const raw = option ? option.getAttribute('data-savings-available') : null;
+
+        if (raw === null || raw === '') {
+            hint.textContent = 'This client has no active savings account.';
+            hint.classList.remove('text-success');
+            hint.classList.add('text-muted');
+        } else {
+            const amount = parseFloat(raw);
+            hint.textContent = 'Available savings balance: ' + amount.toLocaleString(undefined, {maximumFractionDigits: 0});
+            hint.classList.remove('text-muted');
+            hint.classList.add('text-success');
+        }
+    }
+
+    function onPayFromSavingsToggle() {
+        // Note: intentionally not disabling the Method select — a disabled
+        // field is excluded from form submission and would fail the
+        // server-side "required" check. The server overrides payment_method
+        // to "Savings Wallet" automatically when this box is checked.
+        const checkbox = document.getElementById('payFromSavings');
+        const methodSelect = document.getElementById('paymentMethod');
+        if (!checkbox || !methodSelect) return;
+
+        methodSelect.style.opacity = checkbox.checked ? '0.5' : '1';
     }
 </script>
 @endpush

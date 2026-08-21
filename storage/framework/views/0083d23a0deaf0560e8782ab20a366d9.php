@@ -1,0 +1,83 @@
+<?php $__env->startSection('title', 'Share Accounts'); ?>
+
+<?php $__env->startSection('content'); ?>
+<div class="container-fluid px-0">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-dark fw-bold"><i class="fas fa-chart-pie text-warning me-2"></i> Share Accounts</h1>
+            <p class="text-muted mb-0 small">Total units in issue: <strong><?php echo e(rtrim(rtrim(number_format($totalUnits, 4), '0'), '.')); ?></strong></p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="<?php echo e(route('mfi.dividends.create')); ?>" class="btn btn-outline-primary fw-bold shadow-sm">
+                <i class="fas fa-hand-holding-usd me-2"></i> Declare Dividend
+            </a>
+            <a href="<?php echo e(route('mfi.shares.create')); ?>" class="btn btn-success fw-bold shadow-sm">
+                <i class="fas fa-plus me-2"></i> Open Share Account
+            </a>
+        </div>
+    </div>
+
+    <?php if(session('success')): ?>
+        <div class="alert alert-success alert-dismissible fade show shadow-sm border-start border-success border-4">
+            <i class="fas fa-check-circle me-2"></i> <?php echo e(session('success')); ?>
+
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white py-3">
+            <h6 class="m-0 fw-bold text-primary">Members with Shares</h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-secondary small text-uppercase">
+                        <tr>
+                            <th class="ps-4">Account Number</th>
+                            <th>Client Name</th>
+                            <th class="text-end">Units Held</th>
+                            <th class="text-end">Current Value</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-end pe-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php $__empty_1 = true; $__currentLoopData = $accounts; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $account): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                        <tr>
+                            <td class="ps-4 fw-bold font-monospace text-primary"><?php echo e($account->account_number); ?></td>
+                            <td class="fw-bold text-dark"><?php echo e($account->client->name ?? 'Unknown Client'); ?></td>
+                            <td class="text-end font-monospace"><?php echo e(rtrim(rtrim(number_format($account->units, 4), '0'), '.')); ?></td>
+                            <td class="text-end text-success fw-bold font-monospace"><?php echo e(number_format($account->balance)); ?></td>
+                            <td class="text-center">
+                                <?php if($account->status == 'active'): ?>
+                                    <span class="badge bg-success px-3 py-1 rounded-pill">Active</span>
+                                <?php else: ?>
+                                    <span class="badge bg-secondary px-3 py-1 rounded-pill"><?php echo e(ucfirst($account->status)); ?></span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="text-end pe-4">
+                                <a href="<?php echo e(route('mfi.shares.show', $account->id)); ?>" class="btn btn-sm btn-outline-primary shadow-sm">
+                                    <i class="fas fa-exchange-alt"></i> Manage
+                                </a>
+                            </td>
+                        </tr>
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
+                        <tr>
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                <i class="fas fa-chart-pie fa-3x mb-3 text-light"></i>
+                                <h5>No share accounts opened yet.</h5>
+                                <a href="<?php echo e(route('mfi.shares.create')); ?>" class="btn btn-sm btn-outline-primary mt-2">Open First Account</a>
+                            </td>
+                        </tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<?php $__env->stopSection(); ?>
+
+<?php echo $__env->make('layouts.manager', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH C:\xampp\htdocs\agile_accounts\agile_accounts\resources\views/loan-manager/mfi/shares/index.blade.php ENDPATH**/ ?>

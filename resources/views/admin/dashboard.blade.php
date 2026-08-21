@@ -44,7 +44,7 @@
                 </div>
 
                 <div class="dropdown no-arrow">
-                    <a href="#" class="btn btn-sm btn-primary shadow-sm">
+                    <a href="{{ route('admin.broadcasts.index') }}" class="btn btn-sm btn-primary shadow-sm">
                         <i class="fas fa-bullhorn fa-sm text-white-50"></i> Broadcast
                     </a>
                 </div>
@@ -124,6 +124,21 @@
                                         <a href="{{ route('admin.users.impersonate', $manager->id) }}" class="btn btn-info btn-sm shadow-sm" title="Login as this user">
                                             <i class="fas fa-user-secret"></i>
                                         </a>
+
+                                        {{-- 2b. UPGRADE TO MFI (paid add-on — only offered once, and only after
+                                             you've confirmed payment outside the app) --}}
+                                        @if($profile && !$profile->is_mfi)
+                                            <form action="{{ route('admin.managers.upgrade-mfi', $profile->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Grant {{ $manager->name }} MFI Hub access? Only do this after confirming their premium payment.');">
+                                                @csrf
+                                                <button type="submit" class="btn btn-dark btn-sm shadow-sm" title="Upgrade to MFI Hub">
+                                                    <i class="fas fa-crown"></i>
+                                                </button>
+                                            </form>
+                                        @else
+                                            <span class="btn btn-sm shadow-sm disabled" title="Already on MFI Hub" style="background-color:#d1e7dd; color:#0f5132; cursor:default;">
+                                                <i class="fas fa-crown"></i>
+                                            </span>
+                                        @endif
 
                                         {{-- 3. SUSPEND / ACTIVATE --}}
                                         @if ($isActive && $profile->is_active)

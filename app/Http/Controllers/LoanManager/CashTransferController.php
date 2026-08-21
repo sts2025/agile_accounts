@@ -4,8 +4,6 @@ namespace App\Http\Controllers\LoanManager;
 
 use App\Http\Controllers\Controller;
 use App\Models\CashTransfer;
-use App\Models\Account;
-use App\Models\GeneralLedgerTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -22,19 +20,14 @@ class CashTransferController extends Controller
         ]);
 
         // CORRECTED: Create the transfer via the loanManager
-        $transfer = Auth::user()->loanManager->cashTransfers()->create($validated);
+        Auth::user()->loanManager->cashTransfers()->create($validated);
 
-        // Your existing accounting logic is preserved
-        $cashAccount = Account::where('name', 'Cash on Hand')->firstOrFail();
-        $transferAccount = Account::where('name', 'Inter-branch Transfers')->firstOrFail();
-
-        if ($transfer->type === 'in') { // Receivable
-            GeneralLedgerTransaction::create(['account_id' => $cashAccount->id, 'transaction_date' => $transfer->transaction_date, 'description' => $transfer->description, 'debit' => $transfer->amount, 'credit' => 0]);
-            GeneralLedgerTransaction::create(['account_id' => $transferAccount->id, 'transaction_date' => $transfer->transaction_date, 'description' => $transfer->description, 'debit' => 0, 'credit' => $transfer->amount]);
-        } else { // Payable
-            GeneralLedgerTransaction::create(['account_id' => $cashAccount->id, 'transaction_date' => $transfer->transaction_date, 'description' => $transfer->description, 'debit' => 0, 'credit' => $transfer->amount]);
-            GeneralLedgerTransaction::create(['account_id' => $transferAccount->id, 'transaction_date' => $transfer->transaction_date, 'description' => $transfer->description, 'debit' => $transfer->amount, 'credit' => 0]);
-        }
+        // Note: this used to also post to the formal GeneralLedgerTransaction/
+        // Account tables via Account::firstOrFail() — a global (non-tenant-
+        // scoped), unread ledger that no report anywhere consumes. Removed:
+        // it was dead weight, and firstOrFail() meant this whole action would
+        // crash with a 404 for any tenant if those global seed rows were ever
+        // missing. cash_transfers is the real, read source of truth already.
 
         return redirect()->route('dashboard')->with('status', 'Cash transfer recorded successfully!');
     }

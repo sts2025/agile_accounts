@@ -26,8 +26,13 @@ class LoanManager extends Model
 
     // ... (Your user(), clients(), loans(), etc. relationships are all correct) ...
     public function user() { return $this->belongsTo(User::class); }
+    /** Cashier/employee accounts under this tenant — users.loan_manager_id stores loan_managers.id, same convention as everywhere else. */
+    public function staff() { return $this->hasMany(User::class, 'loan_manager_id', 'id')->where('role', 'cashier'); }
     public function clients() { return $this->hasMany(Client::class, 'loan_manager_id', 'id'); }
     public function loans() { return $this->hasMany(Loan::class, 'loan_manager_id', 'id'); }
+    public function clientGroups() { return $this->hasMany(ClientGroup::class, 'loan_manager_id', 'id'); }
+    public function chartOfAccounts() { return $this->hasMany(ChartOfAccount::class, 'loan_manager_id', 'id'); }
+    public function journalEntries() { return $this->hasMany(JournalEntry::class, 'loan_manager_id', 'id'); }
     public function payments() { return $this->hasManyThrough(Payment::class, Loan::class); }
     public function expenses() { return $this->hasMany(Expense::class, 'loan_manager_id', 'id'); }
     public function bankTransactions() { return $this->hasMany(BankTransaction::class, 'loan_manager_id', 'id'); }

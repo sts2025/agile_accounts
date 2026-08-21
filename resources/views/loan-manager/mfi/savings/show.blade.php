@@ -10,12 +10,47 @@
         <div>
             <h1 class="h3 mb-0 text-dark fw-bold">
                 Account: <span class="font-monospace text-primary">{{ $account->account_number }}</span>
+                @if($account->nickname)
+                    <span class="text-muted">— {{ $account->nickname }}</span>
+                @endif
+                @if($account->status === 'on_hold')
+                    <span class="badge bg-warning text-dark ms-2">On Hold</span>
+                @elseif($account->status === 'closed')
+                    <span class="badge bg-secondary ms-2">Closed</span>
+                @endif
             </h1>
             <p class="mb-0 text-muted">Client: <strong>{{ $account->client->name }}</strong> ({{ $account->client->phone_number }})</p>
         </div>
-        <a href="{{ route('mfi.savings.index') }}" class="btn btn-secondary shadow-sm">
-            <i class="fas fa-arrow-left me-2"></i> Back to Accounts
-        </a>
+        <div class="d-flex gap-2">
+            @if($account->status === 'active')
+                <form action="{{ route('mfi.savings.hold', $account->id) }}" method="POST" onsubmit="return confirm('Put this account on hold? Deposits and withdrawals will be blocked until it is taken off hold.');">
+                    @csrf
+                    <button type="submit" class="btn btn-outline-warning shadow-sm">
+                        <i class="fas fa-pause-circle me-2"></i> Put on Hold
+                    </button>
+                </form>
+            @elseif($account->status === 'on_hold')
+                <form action="{{ route('mfi.savings.unhold', $account->id) }}" method="POST" onsubmit="return confirm('Take this account off hold and resume normal transactions?');">
+                    @csrf
+                    <button type="submit" class="btn btn-outline-success shadow-sm">
+                        <i class="fas fa-play-circle me-2"></i> Take Off Hold
+                    </button>
+                </form>
+            @endif
+
+            @if($account->status !== 'closed')
+                <form action="{{ route('mfi.savings.close', $account->id) }}" method="POST" onsubmit="return confirm('Close this account? {{ $account->balance > 0 ? 'The remaining balance will be paid out as a final withdrawal. ' : '' }}This cannot be undone.');">
+                    @csrf
+                    <button type="submit" class="btn btn-outline-danger shadow-sm">
+                        <i class="fas fa-times-circle me-2"></i> Close Account
+                    </button>
+                </form>
+            @endif
+
+            <a href="{{ route('mfi.savings.index') }}" class="btn btn-secondary shadow-sm">
+                <i class="fas fa-arrow-left me-2"></i> Back to Accounts
+            </a>
+        </div>
     </div>
 
     {{-- Alerts & Error Handling --}}
@@ -67,14 +102,24 @@
                         @endif
                     </div>
                     
-                    <div class="d-grid gap-3 mt-4">
-                        <button class="btn btn-success btn-lg fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#depositModal">
-                            <i class="fas fa-arrow-down me-2"></i> Deposit Cash
-                        </button>
-                        <button class="btn btn-warning btn-lg fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#withdrawModal">
-                            <i class="fas fa-arrow-up me-2"></i> Withdraw Cash
-                        </button>
-                    </div>
+                    @if($account->status === 'active')
+                        <div class="d-grid gap-3 mt-4">
+                            <button class="btn btn-success btn-lg fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#depositModal">
+                                <i class="fas fa-arrow-down me-2"></i> Deposit Cash
+                            </button>
+                            <button class="btn btn-warning btn-lg fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#withdrawModal">
+                                <i class="fas fa-arrow-up me-2"></i> Withdraw Cash
+                            </button>
+                        </div>
+                    @elseif($account->status === 'on_hold')
+                        <div class="alert alert-warning text-center mb-0 mt-4">
+                            <i class="fas fa-pause-circle me-1"></i> This account is on hold. Transactions are blocked.
+                        </div>
+                    @else
+                        <div class="alert alert-secondary text-center mb-0 mt-4">
+                            <i class="fas fa-times-circle me-1"></i> This account is closed.
+                        </div>
+                    @endif
                 </div>
             </div>
         </div>
@@ -84,9 +129,9 @@
             <div class="card shadow-sm border-0 h-100">
                 <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
                     <h6 class="m-0 fw-bold text-primary"><i class="fas fa-history me-2"></i> Passbook / Statement</h6>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="window.print()">
-                        <i class="fas fa-print"></i> Print
-                    </button>
+                    <a href="{{ route('mfi.savings.passbook', $account->id) }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-print"></i> Print Passbook
+                    </a>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
@@ -103,19 +148,22 @@
                             <tbody>
                                 @forelse($account->transactions as $tx)
                                 <tr>
-                                    {{-- Use created_at as we changed the schema slightly --}}
                                     <td class="ps-4 text-muted small">{{ \Carbon\Carbon::parse($tx->created_at)->format('d M, Y H:i') }}</td>
                                     <td>
-                                        @if($tx->type == 'deposit')
+                                        @if($tx->transaction_type == 'deposit')
                                             <span class="badge bg-success bg-opacity-10 text-success px-2 py-1"><i class="fas fa-plus me-1"></i> Deposit</span>
-                                        @else
+                                        @elseif($tx->transaction_type == 'withdrawal')
                                             <span class="badge bg-warning bg-opacity-10 text-warning px-2 py-1"><i class="fas fa-minus me-1"></i> Withdraw</span>
+                                        @elseif($tx->transaction_type == 'dividend')
+                                            <span class="badge bg-info bg-opacity-10 text-info px-2 py-1"><i class="fas fa-gift me-1"></i> Dividend</span>
+                                        @else
+                                            <span class="badge bg-secondary bg-opacity-10 text-secondary px-2 py-1">{{ ucfirst($tx->transaction_type) }}</span>
                                         @endif
                                     </td>
-                                    <td class="text-muted small">{{ $tx->reference ?? 'N/A' }}</td>
-                                    <td class="text-muted small">Via Controller Logic</td>
-                                    <td class="text-end pe-4 fw-bold font-monospace {{ $tx->type == 'deposit' ? 'text-success' : 'text-danger' }}">
-                                        {{ $tx->type == 'deposit' ? '+' : '-' }} {{ number_format($tx->amount) }}
+                                    <td class="text-muted small">{{ $tx->reference_number ?? 'N/A' }}</td>
+                                    <td class="text-muted small">{{ $tx->narration ?? '—' }}</td>
+                                    <td class="text-end pe-4 fw-bold font-monospace {{ $tx->transaction_type == 'withdrawal' ? 'text-danger' : 'text-success' }}">
+                                        {{ $tx->transaction_type == 'withdrawal' ? '-' : '+' }} {{ number_format($tx->amount) }}
                                     </td>
                                 </tr>
                                 @empty

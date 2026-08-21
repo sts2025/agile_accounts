@@ -95,7 +95,14 @@
                     </ul>
                 </div>
             </li>
-            
+
+            {{-- CLIENT GROUPS --}}
+            <li class="nav-item">
+                <a class="nav-link {{ request()->routeIs('client-groups.*') ? 'active' : '' }}" href="{{ route('client-groups.index') }}">
+                    <i class="bi bi-diagram-3-fill me-2"></i> Client Groups
+                </a>
+            </li>
+
             {{-- LOANS --}}
             <li class="nav-item"> 
                 <a class="nav-link collapsed" href="#loans-submenu" data-bs-toggle="collapse"> 
@@ -107,28 +114,38 @@
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('loans.index') && !request()->has('filter') ? 'active' : '' }}" href="{{ route('loans.index') }}">All Loans</a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('loans.create') ? 'active' : '' }}" href="{{ route('loans.create') }}">Create Loan</a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('loans.index', ['filter' => 'completed']) ? 'active' : '' }}" href="{{ route('loans.index', ['filter' => 'completed']) }}">Completed Loans</a></li>
-                        
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('loans.index', ['filter' => 'pending']) ? 'active' : '' }}" href="{{ route('loans.index', ['filter' => 'pending']) }}">Pending Approvals</a></li>
+
                         <div class="submenu-header">Tools</div>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('loans.showCalculator') ? 'active' : '' }}" href="{{ route('loans.showCalculator') }}">Loan Calculator</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('loan-penalty-settings.*') ? 'active' : '' }}" href="{{ route('loan-penalty-settings.edit') }}">Penalty & Arrears Settings</a></li>
                     </ul>
                 </div>
             </li>
 
             {{-- ============================================== --}}
-            {{-- MICROFINANCE HUB (FORCED VISIBLE) --}}
+            {{-- MICROFINANCE HUB (only shown to upgraded tenants) --}}
             {{-- ============================================== --}}
-            <div class="sidebar-sub-header" style="color: #f1c40f;"><i class="fas fa-crown me-1"></i> Microfinance Hub</div>
-            <li class="nav-item">
-                <a class="nav-link collapsed" href="#mfi-submenu" data-bs-toggle="collapse" style="color: #f1c40f;"> 
-                    <i class="fas fa-piggy-bank me-2"></i> Savings Accounts 
-                </a>
-                <div class="collapse {{ request()->routeIs('mfi.savings.*') ? 'show' : '' }}" id="mfi-submenu">
-                    <ul class="nav flex-column ms-2">
-                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.savings.index') ? 'active' : '' }}" href="{{ route('mfi.savings.index') }}">All Accounts</a></li>
-                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.savings.create') ? 'active' : '' }}" href="{{ route('mfi.savings.create') }}">Open New Account</a></li>
-                    </ul>
-                </div>
-            </li>
+            @php $isMfi = optional(Auth::user()->getCompany())->is_mfi ?? false; @endphp
+            @if($isMfi)
+                <div class="sidebar-sub-header" style="color: #f1c40f;"><i class="fas fa-crown me-1"></i> Microfinance Hub</div>
+                <li class="nav-item">
+                    <a class="nav-link collapsed" href="#mfi-submenu" data-bs-toggle="collapse" style="color: #f1c40f;">
+                        <i class="fas fa-piggy-bank me-2"></i> Savings Accounts
+                    </a>
+                    <div class="collapse {{ request()->routeIs('mfi.savings.*', 'mfi.products.*', 'mfi.shares.*', 'mfi.dividends.*', 'mfi.fixed-deposits.*', 'mfi.end-of-period.*') ? 'show' : '' }}" id="mfi-submenu">
+                        <ul class="nav flex-column ms-2">
+                            <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.savings.index') ? 'active' : '' }}" href="{{ route('mfi.savings.index') }}">All Accounts</a></li>
+                            <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.savings.create') ? 'active' : '' }}" href="{{ route('mfi.savings.create') }}">Open New Account</a></li>
+                            <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.fixed-deposits.*') ? 'active' : '' }}" href="{{ route('mfi.fixed-deposits.index') }}">Fixed Deposits</a></li>
+                            <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.shares.*') ? 'active' : '' }}" href="{{ route('mfi.shares.index') }}">Shares</a></li>
+                            <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.dividends.*') ? 'active' : '' }}" href="{{ route('mfi.dividends.create') }}">Declare Dividend</a></li>
+                            <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.end-of-period.*') ? 'active' : '' }}" href="{{ route('mfi.end-of-period.index') }}">End of Period</a></li>
+                            <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.products.*') ? 'active' : '' }}" href="{{ route('mfi.products.index') }}">Product Settings</a></li>
+                        </ul>
+                    </div>
+                </li>
+            @endif
             {{-- ============================================== --}}
             
             {{-- REPORTS --}}
@@ -154,7 +171,7 @@
                 <a class="nav-link collapsed" href="#transactions-submenu" data-bs-toggle="collapse"> 
                     <i class="bi bi-arrow-down-up me-2"></i> Transactions 
                 </a>
-                <div class="collapse {{ request()->routeIs(['bank-transactions.*', 'expenses.*', 'cash-transactions.*']) ? 'show' : '' }}" id="transactions-submenu">
+                <div class="collapse {{ request()->routeIs(['bank-transactions.*', 'expenses.*', 'cash-transactions.*', 'chart-of-accounts.*', 'journal-entries.*']) ? 'show' : '' }}" id="transactions-submenu">
                     <ul class="nav flex-column ms-2">
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('bank-transactions.index') ? 'active' : '' }}" href="{{ route('bank-transactions.index') }}">
                             <i class="fas fa-university me-2"></i> Bank Deposits
@@ -164,6 +181,15 @@
                         </a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('cash-transactions.index') ? 'active' : '' }}" href="{{ route('cash-transactions.index') }}">
                             <i class="fas fa-hand-holding-usd me-2"></i> Cash Flow
+                        </a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('chart-of-accounts.*') ? 'active' : '' }}" href="{{ route('chart-of-accounts.index') }}">
+                            <i class="fas fa-book me-2"></i> Chart of Accounts
+                        </a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('journal-entries.*') ? 'active' : '' }}" href="{{ route('journal-entries.index') }}">
+                            <i class="fas fa-pen-fancy me-2"></i> General Journal
+                        </a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('error-correction.*') ? 'active' : '' }}" href="{{ route('error-correction.index') }}">
+                            <i class="fas fa-eraser me-2"></i> Error Correction
                         </a></li>
                     </ul>
                 </div>

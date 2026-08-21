@@ -49,6 +49,16 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
 <?php $__env->startSection('content'); ?>
 
     
+    <?php if($latestMessage): ?>
+        <div class="alert alert-info alert-dismissible fade show shadow-sm border-start border-info border-4">
+            <h5 class="alert-heading mb-1"><i class="fas fa-bullhorn me-2"></i><?php echo e($latestMessage->title); ?></h5>
+            <p class="mb-1"><?php echo e($latestMessage->body); ?></p>
+            <small class="text-muted">Posted <?php echo e($latestMessage->created_at->format('d M, Y')); ?></small>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
+
+    
     <?php if(session('success')): ?>
         <div class="alert alert-success alert-dismissible fade show shadow-sm border-start border-success border-4">
             <i class="fas fa-check-circle me-2"></i> <?php echo e(session('success')); ?>

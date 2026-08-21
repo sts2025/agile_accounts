@@ -35,6 +35,14 @@ $currency = \App\Models\LoanManager::getCurrency();
         {{-- Net Cash Flow --}}
         <div class="col-md-3"><div class="card text-white bg-dark h-100"><div class="card-body"><h5 class="card-title">Net Cash Flow</h5>@php $netCashFlow = $summary['total_payments_received'] - $summary['total_loaned_principal']; @endphp<p class="card-text fs-4 @if($netCashFlow < 0) text-warning @endif">{{ $currency }} {{ number_format($netCashFlow, 0) }}</p><small>Received minus Given</small></div></div></div>
     </div>
+    @if(($summary['total_savings_deposited'] ?? 0) > 0 || ($summary['total_savings_withdrawn'] ?? 0) > 0)
+    <div class="row mb-4">
+        {{-- Savings Mobilized --}}
+        <div class="col-md-3"><div class="card text-white bg-warning h-100"><div class="card-body"><h5 class="card-title">Savings Deposited</h5><p class="card-text fs-4">{{ $currency }} {{ number_format($summary['total_savings_deposited'], 0) }}</p><small>Client savings mobilized today</small></div></div></div>
+        {{-- Savings Withdrawn --}}
+        <div class="col-md-3"><div class="card text-white bg-secondary h-100"><div class="card-body"><h5 class="card-title">Savings Withdrawn</h5><p class="card-text fs-4">{{ $currency }} {{ number_format($summary['total_savings_withdrawn'], 0) }}</p><small>Paid out to clients today</small></div></div></div>
+    </div>
+    @endif
     <div class="card mb-4">
         <div class="card-header"><h4>Loans Given Out Details</h4></div>
         <div class="card-body">

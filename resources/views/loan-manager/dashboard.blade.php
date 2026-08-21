@@ -48,6 +48,16 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
 
 @section('content')
 
+    {{-- PLATFORM ANNOUNCEMENT --}}
+    @if($latestMessage)
+        <div class="alert alert-info alert-dismissible fade show shadow-sm border-start border-info border-4">
+            <h5 class="alert-heading mb-1"><i class="fas fa-bullhorn me-2"></i>{{ $latestMessage->title }}</h5>
+            <p class="mb-1">{{ $latestMessage->body }}</p>
+            <small class="text-muted">Posted {{ $latestMessage->created_at->format('d M, Y') }}</small>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    @endif
+
     {{-- ERROR/SUCCESS ALERTS --}}
     @if(session('success'))
         <div class="alert alert-success alert-dismissible fade show shadow-sm border-start border-success border-4">
@@ -86,14 +96,8 @@ $currencySymbol = $currency ?? \App\Models\LoanManager::getCurrency() ?? 'UGX';
         <div class="alert shadow-sm border-0 d-flex justify-content-between align-items-center mb-4 rounded" style="background-color: #fff3cd;">
             <div>
                 <h5 class="mb-1 fw-bold text-dark"><i class="fas fa-rocket text-warning me-2"></i> Unlock Microfinance Features!</h5>
-                <p class="mb-0 text-muted small">Upgrade your account to access Savings Accounts, General Ledger, Teller Operations, and Automated Penalties. Your existing loans will be safely integrated.</p>
+                <p class="mb-0 text-muted small">Savings Accounts, Shares & Dividends, Fixed Deposits, and Group Lending are available as a premium add-on. Contact {{ optional(Auth::user()->getCompany())->support_phone ?? 'support' }} to subscribe — your existing loans will be safely integrated the moment it's activated.</p>
             </div>
-            <form action="{{ route('mfi.upgrade') }}" method="POST" onsubmit="return confirm('Are you sure you want to upgrade your system to the MFI Engine?');">
-                @csrf
-                <button type="submit" class="btn btn-dark fw-bold px-4 shadow-sm">
-                    Upgrade to MFI
-                </button>
-            </form>
         </div>
     @else
         <div class="alert alert-success shadow-sm border-0 mb-4 rounded" style="background-color: #d1e7dd;">

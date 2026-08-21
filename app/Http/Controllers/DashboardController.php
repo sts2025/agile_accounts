@@ -10,7 +10,8 @@ use App\Models\Payment;
 use App\Models\Expense;
 use App\Models\CashTransaction;
 use App\Models\BankTransaction;
-use App\Models\ExpenseCategory; 
+use App\Models\ExpenseCategory;
+use App\Models\BroadcastMessage;
 use Carbon\Carbon;
 
 class DashboardController extends Controller
@@ -97,7 +98,11 @@ class DashboardController extends Controller
             })->whereDate('payment_date', $date)->sum('amount_paid');
         }
         
+        // Platform-wide announcement from the admin, if one is currently active.
+        $latestMessage = BroadcastMessage::active()->latest()->first();
+
         return view('loan-manager.dashboard', [
+            'latestMessage' => $latestMessage,
             'totalClients' => $totalClients,
             'activeLoansCount' => $activeLoansCount,
             'totalLoanedAmount' => $totalLoanAmount,

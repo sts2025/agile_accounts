@@ -24,4 +24,10 @@ class MfiAccount extends Model
     {
         return $this->hasMany(MfiTransaction::class);
     }
+
+    // The product (rate/rules) this account was opened under
+    public function mfiProduct()
+    {
+        return $this->belongsTo(MfiProduct::class, 'mfi_product_id');
+    }
 }

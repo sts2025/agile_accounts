@@ -14,6 +14,12 @@
         </div>
     @endif
 
+    @if (session('error'))
+        <div class="alert alert-danger">
+            {{ session('error') }}
+        </div>
+    @endif
+
     <div class="card mb-4">
         <div class="card-header">Find a Client</div>
         <div class="card-body">
@@ -35,16 +41,18 @@
                         <th>Phone Number</th>
                         <th>Address</th>
                         <th>Business / Occupation</th>
+                        <th>Assigned Officer</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse ($clients as $client)
                         <tr>
-                            <td>{{ $client->name }}</td>
+                            <td>{{ $client->name }} @if($client->is_blacklisted)<span class="badge badge-dark">Blacklisted</span>@endif</td>
                             <td>{{ $client->phone_number }}</td>
                             <td>{{ $client->address }}</td>
                             <td>{{ $client->business_occupation ?? 'N/A' }}</td>
+                            <td class="text-muted small">{{ optional($client->assignedUser)->name ?? '—' }}</td>
                             <td>
                                 <a href="{{ route('clients.edit', $client->id) }}" class="btn btn-secondary btn-sm">Edit</a>
 
@@ -64,7 +72,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="text-center">No clients found.</td>
+                            <td colspan="6" class="text-center">No clients found.</td>
                         </tr>
                     @endforelse
                 </tbody>
