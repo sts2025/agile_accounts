@@ -17,6 +17,17 @@ $app = require_once __DIR__ . '/../bootstrap/app.php';
 $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
 $kernel->bootstrap();
 
-Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+$out = '';
 
-echo '<pre>' . htmlspecialchars(Illuminate\Support\Facades\Artisan::output()) . '</pre>';
+// Clear any stale cached config/routes left over from before the .htaccess
+// fix (a stale cached APP_URL/session config is a common cause of 419 page
+// expired / CSRF errors right after a document-root change like this one).
+foreach (['config:clear', 'cache:clear', 'route:clear', 'view:clear'] as $cmd) {
+    Illuminate\Support\Facades\Artisan::call($cmd);
+    $out .= "\$ php artisan {$cmd}\n" . Illuminate\Support\Facades\Artisan::output() . "\n";
+}
+
+Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+$out .= "\$ php artisan migrate --force\n" . Illuminate\Support\Facades\Artisan::output();
+
+echo '<pre>' . htmlspecialchars($out) . '</pre>';
