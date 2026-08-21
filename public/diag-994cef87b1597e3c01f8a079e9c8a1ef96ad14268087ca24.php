@@ -2,41 +2,33 @@
 // TEMPORARY diagnostic script. DELETE once no longer needed.
 echo "<pre>";
 
-$gitDir = __DIR__ . '/../.git';
-echo ".git exists: " . var_export(is_dir($gitDir), true) . "\n";
-
-if (is_dir($gitDir)) {
-    $headContent = @file_get_contents($gitDir . '/HEAD');
-    echo "HEAD: " . trim((string)$headContent) . "\n";
-
-    if ($headContent && preg_match('/ref: (.+)/', $headContent, $m)) {
-        $refPath = $gitDir . '/' . trim($m[1]);
-        if (file_exists($refPath)) {
-            echo "Resolved commit: " . trim(file_get_contents($refPath)) . "\n";
-        } else {
-            // maybe packed-refs
-            $packed = @file_get_contents($gitDir . '/packed-refs');
-            if ($packed && preg_match('/^([a-f0-9]+) ' . preg_quote(trim($m[1]), '/') . '$/m', $packed, $pm)) {
-                echo "Resolved commit (packed-refs): " . $pm[1] . "\n";
-            } else {
-                echo "Could not resolve ref: " . trim($m[1]) . "\n";
+$dir = __DIR__ . '/../app/View';
+echo "Contents of app/View/:\n";
+if (is_dir($dir)) {
+    foreach (scandir($dir) as $f) {
+        if ($f === '.' || $f === '..') continue;
+        $full = $dir . '/' . $f;
+        echo "  - " . $f . (is_dir($full) ? '/' : '') . "\n";
+        if (is_dir($full)) {
+            foreach (scandir($full) as $f2) {
+                if ($f2 === '.' || $f2 === '..') continue;
+                echo "      - " . $f2 . "\n";
             }
         }
     }
+} else {
+    echo "  (app/View does not exist)\n";
 }
 
-echo "\nKey file checks:\n";
-$checks = [
-    'app/View/Composers/ManagerLayoutComposer.php',
-    'app/Services/JournalPoster.php',
-    'app/Http/Controllers/LoanManager/ClientController.php',
-    '.htaccess',
-];
-foreach ($checks as $rel) {
-    $p = __DIR__ . '/../' . $rel;
-    $exists = file_exists($p);
-    $mtime = $exists ? date('Y-m-d H:i:s', filemtime($p)) : 'n/a';
-    echo "  {$rel}: " . ($exists ? "EXISTS (mtime {$mtime})" : "MISSING") . "\n";
+echo "\nshell_exec git ls-tree (if available):\n";
+if (function_exists('shell_exec')) {
+    $out = @shell_exec('cd ' . escapeshellarg(__DIR__ . '/..') . ' && git ls-tree -r --name-only HEAD 2>&1 | grep -i composer');
+    echo $out === null ? "  (shell_exec returned null / disabled)\n" : ($out ?: "  (no matches for 'composer' in HEAD tree)\n");
+
+    $log = @shell_exec('cd ' . escapeshellarg(__DIR__ . '/..') . ' && git log --oneline -5 2>&1');
+    echo "\nLast 5 commits on deployed HEAD:\n" . ($log ?: "  (none / shell_exec disabled)\n");
+} else {
+    echo "  (shell_exec disabled on this host)\n";
 }
 
 echo "</pre>";
