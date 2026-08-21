@@ -1,0 +1,14 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # This repo deploys with its whole contents (app/, vendor/, public/, etc.)
+    # directly into the shared-hosting document root, because the primary
+    # domain's document root can't be repointed to the public/ subfolder on
+    # this hosting plan. This silently forwards every request into public/
+    # without physically moving any files — app/, vendor/, .env, storage/,
+    # database/, etc. are never served, since nothing outside public/
+    # matches once the rewrite happens. Laravel's own public/.htaccess
+    # takes over from there as normal.
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ /public/$1 [L]
+</IfModule>
