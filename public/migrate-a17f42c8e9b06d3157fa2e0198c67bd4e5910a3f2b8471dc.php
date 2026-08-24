@@ -1,16 +1,28 @@
 <?php
-// TEMPORARY one-time migration runner. DELETE once migrations have run.
 require __DIR__ . '/../vendor/autoload.php';
 $app = require_once __DIR__ . '/../bootstrap/app.php';
 $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
 $kernel->bootstrap();
 
-$out = '';
-foreach (['config:clear', 'cache:clear', 'route:clear', 'view:clear'] as $cmd) {
-    Illuminate\Support\Facades\Artisan::call($cmd);
-    $out .= "\$ php artisan {$cmd}\n" . Illuminate\Support\Facades\Artisan::output() . "\n";
-}
-Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
-$out .= "\$ php artisan migrate --force\n" . Illuminate\Support\Facades\Artisan::output();
+echo '<pre>';
 
-echo '<pre>' . htmlspecialchars($out) . '</pre>';
+echo "Migration files present on server:\n";
+$files = glob(__DIR__ . '/../database/migrations/*.php');
+sort($files);
+foreach ($files as $f) {
+    if (str_contains($f, '2026_08_2')) {
+        echo "  " . basename($f) . "\n";
+    }
+}
+
+echo "\nmigrations table contents (last 15):\n";
+$rows = Illuminate\Support\Facades\DB::table('migrations')->orderByDesc('id')->limit(15)->get();
+foreach ($rows as $row) {
+    echo "  [{$row->batch}] {$row->migration}\n";
+}
+
+echo "\nphp artisan migrate:status\n";
+Illuminate\Support\Facades\Artisan::call('migrate:status');
+echo Illuminate\Support\Facades\Artisan::output();
+
+echo '</pre>';
