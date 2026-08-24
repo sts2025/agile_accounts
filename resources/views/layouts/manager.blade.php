@@ -164,6 +164,7 @@
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.loan-aging') ? 'active' : '' }}" href="{{ route('reports.loan-aging') }}">Loan Aging Report</a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.loan-classification') ? 'active' : '' }}" href="{{ route('reports.loan-classification') }}">Loan Classification & Provisioning</a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.prudential-returns') ? 'active' : '' }}" href="{{ route('reports.prudential-returns') }}">Prudential Returns</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('activity-log.index') ? 'active' : '' }}" href="{{ route('activity-log.index') }}">Activity Log</a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.print-forms') ? 'active' : '' }}" href="{{ route('reports.print-forms') }}">Print Forms</a></li>
                     </ul>
                 </div>

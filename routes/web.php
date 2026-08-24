@@ -35,6 +35,7 @@ use App\Http\Controllers\LoanManager\LoanPenaltyController;
 use App\Http\Controllers\LoanManager\LoanPenaltySettingController;
 use App\Http\Controllers\LoanManager\LoanClassificationController;
 use App\Http\Controllers\LoanManager\PrudentialReportController;
+use App\Http\Controllers\LoanManager\ActivityLogController;
 use App\Http\Controllers\LoanManager\ErrorCorrectionController;
 use App\Http\Controllers\LoanManager\MfiShareController;
 use App\Http\Controllers\LoanManager\MfiDividendController;
@@ -271,6 +272,8 @@ Route::middleware(['auth'])->group(function () {
             Route::get('prudential-returns/pdf', [PrudentialReportController::class, 'downloadPdf'])->name('prudential-returns.pdf');
             Route::get('print-forms', [ReportController::class, 'showPrintForms'])->name('print-forms');
         });
+
+        Route::get('activity-log', [ActivityLogController::class, 'index'])->name('activity-log.index');
 
         // Settings & Staff
         Route::prefix('manager')->name('manager.')->group(function () {
