@@ -89,7 +89,12 @@ class ReportController extends Controller
         return $pdf->stream('profit-and-loss-'.$data['startDate'].'-to-'.$data['endDate'].'.pdf');
     }
 
-    private function getProfitAndLossData(Request $request)
+    /**
+     * Public so other controllers (e.g. StatutoryReserveController) can
+     * reuse the exact same net-surplus calculation the P&L report uses,
+     * rather than re-deriving it with a second copy of this logic.
+     */
+    public function getProfitAndLossData(Request $request)
     {
         $manager = auth()->user()->loanManager;
         $startDate = $request->input('start_date', now()->startOfMonth()->toDateString());
@@ -516,42 +521,19 @@ class ReportController extends Controller
             ->with(['client', 'payments'])
             ->get();
 
+        // Arrears math (pro-rata "expected payment by today" vs actual paid)
+        // now lives on Loan::arrearsAmount()/daysInArrears() so this report
+        // and the loan classification/provisioning report share one source
+        // of truth instead of two copies of the same formula drifting apart.
         foreach ($activeLoans as $loan) {
-            $totalRepayable = $loan->principal_amount + ($loan->principal_amount * ($loan->interest_rate / 100)) + ($loan->processing_fee ?? 0);
-            $totalPaid = $loan->payments->sum('amount_paid');
-            
-            // Mathematical Arrears Calculation (Bulletproof Fallback)
-            $startDate = \Carbon\Carbon::parse($loan->start_date);
-            $term = max((int)$loan->term, 1);
-            $freq = strtolower($loan->repayment_frequency ?? 'months');
-            
-            if (str_contains($freq, 'month')) {
-                $endDate = $startDate->copy()->addMonths($term);
-            } elseif (str_contains($freq, 'week')) {
-                $endDate = $startDate->copy()->addWeeks($term);
-            } else {
-                $endDate = $startDate->copy()->addMonths($term); // Default
-            }
-            
-            $totalDays = max($startDate->diffInDays($endDate), 1);
-            $daysElapsed = $startDate->diffInDays(now(), false);
-            
-            // If the loan has officially started
-            if ($daysElapsed > 0) {
-                // Calculate exactly how much SHOULD have been paid by today based on time passed
-                $timeRatio = min($daysElapsed / $totalDays, 1);
-                $expectedPayment = $totalRepayable * $timeRatio;
-                
-                $arrears = $expectedPayment - $totalPaid;
-                
-                // If they are behind by more than 0.01
-                if ($arrears > 0.01) {
-                    $loan->days_missed = $daysElapsed;
-                    $loan->arrears = $arrears;
-                    $loan->total_balance = max(0, $totalRepayable - $totalPaid);
-                    
-                    $overdueLoans[] = $loan;
-                }
+            $arrears = $loan->arrearsAmount();
+
+            if ($arrears > 0.01) {
+                $loan->days_missed = $loan->daysInArrears();
+                $loan->arrears = $arrears;
+                $loan->total_balance = $loan->balance();
+
+                $overdueLoans[] = $loan;
             }
         }
         

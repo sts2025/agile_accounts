@@ -70,4 +70,26 @@ class ChartOfAccount extends Model
             ? (float) $debits - (float) $credits
             : (float) $credits - (float) $debits;
     }
+
+    /**
+     * Net movement on this account within a date range (inclusive),
+     * expressed in the account's normal-balance direction. Unlike
+     * balanceAsOf() (a running total up to a cut-off), this is scoped to
+     * only entries dated within [start, end] — used for period figures
+     * like "net surplus for the fiscal year" rather than a cumulative
+     * balance-sheet balance.
+     */
+    public function balanceForPeriod(string $start, string $end): float
+    {
+        $query = $this->journalEntryLines()->whereHas('journalEntry', function ($q) use ($start, $end) {
+            $q->whereBetween('entry_date', [$start, $end]);
+        });
+
+        $debits = (clone $query)->sum('debit');
+        $credits = (clone $query)->sum('credit');
+
+        return $this->normal_balance === 'debit'
+            ? (float) $debits - (float) $credits
+            : (float) $credits - (float) $debits;
+    }
 }

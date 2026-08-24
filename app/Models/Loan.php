@@ -15,6 +15,7 @@ use App\Models\Payment;
 use App\Models\RepaymentSchedule;
 use App\Models\Guarantor;
 use App\Models\Collateral;
+use Carbon\Carbon;
 
 class Loan extends Model
 {
@@ -146,5 +147,70 @@ class Loan extends Model
         
         // Use max(0, ...) to prevent negative balances (overpayment scenario)
         return max(0, $totalRepayable - $totalPaid);
+    }
+
+    /**
+     * Principal + interest + processing fee only — the amount the loan's
+     * term/frequency schedule is actually amortising. Deliberately excludes
+     * one-off penalty charges, which aren't spread over the term and would
+     * distort a pro-rata "how much should be paid by now" calculation.
+     * Used for arrears aging; totalRepayable()/balance() (which do include
+     * penalties) remain the source of truth for what's actually owed.
+     */
+    public function scheduledRepayable(): float
+    {
+        $totalInterest = $this->principal_amount * ($this->interest_rate / 100);
+        return $this->principal_amount + $totalInterest + ($this->processing_fee ?? 0);
+    }
+
+    /**
+     * Pro-rata arrears estimate: how far actual payments are behind what
+     * should have been paid by today, assuming even repayment across the
+     * term. This is an approximation (there's no populated per-installment
+     * due-date schedule to compare against — see repaymentSchedules(),
+     * which nothing currently writes to) rather than a true days-past-due
+     * figure, but it's the same method the loan aging report and loan
+     * classification/provisioning both rely on as their single source of
+     * truth for "is this loan behind, and by how much."
+     */
+    public function arrearsAmount(): float
+    {
+        $totalPaid = $this->payments()->sum('amount_paid');
+        $scheduledRepayable = $this->scheduledRepayable();
+
+        $startDate = Carbon::parse($this->start_date);
+        $term = max((int) $this->term, 1);
+        $freq = strtolower($this->repayment_frequency ?? 'months');
+
+        $endDate = str_contains($freq, 'week')
+            ? $startDate->copy()->addWeeks($term)
+            : $startDate->copy()->addMonths($term);
+
+        $totalDays = max($startDate->diffInDays($endDate), 1);
+        $daysElapsed = $startDate->diffInDays(now(), false);
+
+        if ($daysElapsed <= 0) {
+            return 0.0;
+        }
+
+        $timeRatio = min($daysElapsed / $totalDays, 1);
+        $expectedPayment = $scheduledRepayable * $timeRatio;
+
+        return max(0, round($expectedPayment - $totalPaid, 2));
+    }
+
+    /**
+     * Days since the loan started, but only counted once it's actually
+     * behind (arrearsAmount() > 0) — a loan that's current returns 0
+     * regardless of its age. Used to bucket loans into aging/classification
+     * tiers (Normal/Watch/Substandard/Doubtful/Loss).
+     */
+    public function daysInArrears(): int
+    {
+        if ($this->arrearsAmount() <= 0.01) {
+            return 0;
+        }
+
+        return max(0, (int) Carbon::parse($this->start_date)->diffInDays(now(), false));
     }
 }

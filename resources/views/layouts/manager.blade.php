@@ -140,6 +140,7 @@
                             <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.fixed-deposits.*') ? 'active' : '' }}" href="{{ route('mfi.fixed-deposits.index') }}">Fixed Deposits</a></li>
                             <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.shares.*') ? 'active' : '' }}" href="{{ route('mfi.shares.index') }}">Shares</a></li>
                             <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.dividends.*') ? 'active' : '' }}" href="{{ route('mfi.dividends.create') }}">Declare Dividend</a></li>
+                            <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.reserve.*') ? 'active' : '' }}" href="{{ route('mfi.reserve.index') }}">Statutory Reserve</a></li>
                             <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.end-of-period.*') ? 'active' : '' }}" href="{{ route('mfi.end-of-period.index') }}">End of Period</a></li>
                             <li class="nav-item"><a class="nav-link {{ request()->routeIs('mfi.products.*') ? 'active' : '' }}" href="{{ route('mfi.products.index') }}">Product Settings</a></li>
                         </ul>
@@ -161,6 +162,8 @@
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.profit-and-loss') ? 'active' : '' }}" href="{{ route('reports.profit-and-loss') }}">P&L Statement</a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.balance-sheet') ? 'active' : '' }}" href="{{ route('reports.balance-sheet') }}">Balance Sheet</a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.loan-aging') ? 'active' : '' }}" href="{{ route('reports.loan-aging') }}">Loan Aging Report</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.loan-classification') ? 'active' : '' }}" href="{{ route('reports.loan-classification') }}">Loan Classification & Provisioning</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.prudential-returns') ? 'active' : '' }}" href="{{ route('reports.prudential-returns') }}">Prudential Returns</a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.print-forms') ? 'active' : '' }}" href="{{ route('reports.print-forms') }}">Print Forms</a></li>
                     </ul>
                 </div>

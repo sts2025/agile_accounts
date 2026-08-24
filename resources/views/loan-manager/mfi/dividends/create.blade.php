@@ -18,6 +18,14 @@
         </div>
     @endif
 
+    <div class="alert alert-info shadow-sm border-start border-info border-4">
+        <strong>This year so far:</strong> Net surplus {{ number_format($netSurplus) }}
+        &middot; Statutory reserve required ({{ number_format($reservePercent, 2) }}%): {{ number_format($requiredReserve) }}
+        &middot; Estimated distributable after reserve: <strong>{{ number_format($estimatedDistributable) }}</strong>.
+        This is advisory only — it won't stop you from entering a different pool amount.
+        <a href="{{ route('mfi.reserve.index') }}">Manage the statutory reserve transfer here.</a>
+    </div>
+
     @if($totalUnits <= 0)
         <div class="alert alert-warning shadow-sm border-start border-warning border-4">
             <i class="fas fa-exclamation-triangle me-2"></i>

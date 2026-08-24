@@ -21,15 +21,18 @@ class ChartOfAccountController extends Controller
         ['code' => '1000', 'name' => 'Cash on Hand', 'type' => 'asset'],
         ['code' => '1010', 'name' => 'Bank Account', 'type' => 'asset'],
         ['code' => '1100', 'name' => 'Loan Portfolio (Principal Outstanding)', 'type' => 'asset'],
+        ['code' => '1150', 'name' => 'Loan Loss Reserve (Contra-Asset)', 'type' => 'asset'],
         ['code' => '1200', 'name' => 'Bank Placements (Treasury Fixed Deposits)', 'type' => 'asset'],
         ['code' => '1900', 'name' => 'Other Assets', 'type' => 'asset'],
 
         ['code' => '2000', 'name' => 'Member Savings Deposits', 'type' => 'liability'],
         ['code' => '2100', 'name' => 'Member Fixed Deposits', 'type' => 'liability'],
+        ['code' => '2200', 'name' => 'Dividends Payable', 'type' => 'liability'],
         ['code' => '2900', 'name' => 'Other Liabilities', 'type' => 'liability'],
 
         ['code' => '3000', 'name' => 'Share Capital', 'type' => 'equity'],
         ['code' => '3100', 'name' => 'Retained Earnings', 'type' => 'equity'],
+        ['code' => '3200', 'name' => 'Statutory Reserve Fund', 'type' => 'equity'],
 
         ['code' => '4000', 'name' => 'Interest Income on Loans', 'type' => 'income'],
         ['code' => '4100', 'name' => 'Loan Fees & Charges Income', 'type' => 'income'],

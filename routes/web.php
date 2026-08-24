@@ -33,9 +33,12 @@ use App\Http\Controllers\LoanManager\ChartOfAccountController;
 use App\Http\Controllers\LoanManager\JournalEntryController;
 use App\Http\Controllers\LoanManager\LoanPenaltyController;
 use App\Http\Controllers\LoanManager\LoanPenaltySettingController;
+use App\Http\Controllers\LoanManager\LoanClassificationController;
+use App\Http\Controllers\LoanManager\PrudentialReportController;
 use App\Http\Controllers\LoanManager\ErrorCorrectionController;
 use App\Http\Controllers\LoanManager\MfiShareController;
 use App\Http\Controllers\LoanManager\MfiDividendController;
+use App\Http\Controllers\LoanManager\StatutoryReserveController;
 use App\Http\Controllers\LoanManager\MfiFixedDepositController;
 use App\Http\Controllers\LoanManager\MfiEndOfPeriodController;
 use App\Http\Controllers\LoanManager\SavingsController;
@@ -159,6 +162,14 @@ Route::middleware(['auth'])->group(function () {
                 Route::post('/distribute', [MfiDividendController::class, 'distribute'])->name('distribute');
             });
 
+            // Statutory reserve: mandatory set-aside from net surplus before dividends.
+            Route::prefix('statutory-reserve')->name('reserve.')->group(function () {
+                Route::get('/', [StatutoryReserveController::class, 'index'])->name('index');
+                Route::post('/transfer', [StatutoryReserveController::class, 'transfer'])->name('transfer');
+                Route::get('/settings', [StatutoryReserveController::class, 'editSettings'])->name('settings.edit');
+                Route::put('/settings', [StatutoryReserveController::class, 'updateSettings'])->name('settings.update');
+            });
+
             // Fixed Deposits: term savings that mature on a set date.
             Route::prefix('fixed-deposits')->name('fixed-deposits.')->group(function () {
                 Route::get('/', [MfiFixedDepositController::class, 'index'])->name('index');
@@ -254,6 +265,10 @@ Route::middleware(['auth'])->group(function () {
             Route::get('general-ledger', [ReportController::class, 'generalLedger'])->name('general-ledger');
             Route::get('trial-balance', [ReportController::class, 'trialBalance'])->name('trial-balance');
             Route::get('loan-aging', [ReportController::class, 'loanAging'])->name('loan-aging');
+            Route::get('loan-classification', [LoanClassificationController::class, 'index'])->name('loan-classification');
+            Route::post('loan-classification/run', [LoanClassificationController::class, 'run'])->name('loan-classification.run');
+            Route::get('prudential-returns', [PrudentialReportController::class, 'index'])->name('prudential-returns');
+            Route::get('prudential-returns/pdf', [PrudentialReportController::class, 'downloadPdf'])->name('prudential-returns.pdf');
             Route::get('print-forms', [ReportController::class, 'showPrintForms'])->name('print-forms');
         });
 

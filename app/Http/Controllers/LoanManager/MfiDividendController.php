@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\LoanManager;
 
 use App\Http\Controllers\Controller;
+use App\Models\DividendDistribution;
 use App\Models\MfiAccount;
 use App\Models\MfiTransaction;
+use App\Services\JournalPoster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +23,24 @@ class MfiDividendController extends Controller
             ->where('status', 'active')
             ->sum('units');
 
-        return view('loan-manager.mfi.dividends.create', compact('totalUnits'));
+        // Advisory context only — doesn't block the pool amount a manager
+        // chooses, just surfaces whether the statutory reserve for the
+        // current year has been set aside yet before dividends go out.
+        $reportController = new ReportController();
+        $plData = $reportController->getProfitAndLossData(new Request([
+            'start_date' => now()->startOfYear()->toDateString(),
+            'end_date' => now()->endOfYear()->toDateString(),
+        ]));
+        $netSurplus = max(0, $plData['netProfit']);
+
+        $settings = \App\Models\SaccoReserveSetting::where('loan_manager_id', $managerId)->first();
+        $reservePercent = $settings->statutory_reserve_percent ?? 20.00;
+        $requiredReserve = round($netSurplus * ($reservePercent / 100), 2);
+        $estimatedDistributable = max(0, round($netSurplus - $requiredReserve, 2));
+
+        return view('loan-manager.mfi.dividends.create', compact(
+            'totalUnits', 'netSurplus', 'reservePercent', 'requiredReserve', 'estimatedDistributable'
+        ));
     }
 
     /**
@@ -149,6 +168,38 @@ class MfiDividendController extends Controller
         } catch (Exception $e) {
             return back()->with('error', $e->getMessage())->withInput();
         }
+
+        // The dividend increases what's owed back to members (their savings
+        // balances just went up, mirrored above via increment('balance')),
+        // funded out of accumulated profit — same non-cash pattern as
+        // interest credited to savings: Dr Retained Earnings / Cr Member
+        // Savings Deposits. Posted best-effort like every other auto-posted
+        // flow; a missing/deactivated account just means no entry, not a
+        // blocked distribution (the money has already moved above).
+        $journalEntry = null;
+        if ($paidTotal > 0) {
+            $journalEntry = JournalPoster::post(
+                $managerId,
+                'Dividend distribution' . (!empty($validated['description']) ? ' — ' . $validated['description'] : ''),
+                'dividend_distribution',
+                [
+                    ['code' => '3100', 'debit' => $paidTotal, 'description' => 'Dividend paid from retained earnings'],
+                    ['code' => '2000', 'credit' => $paidTotal, 'description' => 'Credited to member savings'],
+                ]
+            );
+        }
+
+        DividendDistribution::create([
+            'loan_manager_id' => $managerId,
+            'description' => $validated['description'] ?? null,
+            'pool_amount' => $validated['pool_amount'],
+            'paid_total' => $paidTotal,
+            'paid_count' => $paidCount,
+            'skipped_count' => count($skipped),
+            'skipped_breakdown' => $skipped ?: null,
+            'journal_entry_id' => $journalEntry?->id,
+            'created_by' => Auth::id(),
+        ]);
 
         $message = "Dividend distributed to {$paidCount} member(s), totaling " . number_format($paidTotal) . ".";
         if (!empty($skipped)) {
