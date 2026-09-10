@@ -36,6 +36,9 @@ use App\Http\Controllers\LoanManager\LoanPenaltySettingController;
 use App\Http\Controllers\LoanManager\LoanClassificationController;
 use App\Http\Controllers\LoanManager\PrudentialReportController;
 use App\Http\Controllers\LoanManager\ActivityLogController;
+use App\Http\Controllers\LoanManager\NotificationController;
+use App\Http\Controllers\LoanManager\OfficerPerformanceController;
+use App\Http\Controllers\LoanManager\ClientImportController;
 use App\Http\Controllers\LoanManager\ErrorCorrectionController;
 use App\Http\Controllers\LoanManager\MfiShareController;
 use App\Http\Controllers\LoanManager\MfiDividendController;
@@ -194,6 +197,9 @@ Route::middleware(['auth'])->group(function () {
         
         // Clients
         Route::post('/clients/check-global', [ClientController::class, 'checkGlobal'])->name('clients.check-global');
+        Route::get('/clients/import', [ClientImportController::class, 'showForm'])->name('clients.import');
+        Route::get('/clients/import/template', [ClientImportController::class, 'downloadTemplate'])->name('clients.import.template');
+        Route::post('/clients/import', [ClientImportController::class, 'import'])->name('clients.import.store');
         Route::resource('clients', ClientController::class);
         Route::get('/clients/{client}/ledger', [ClientController::class, 'showLedger'])->name('clients.ledger');
         Route::get('/clients/{client}/statement', [ClientController::class, 'statement'])->name('clients.statement');
@@ -217,6 +223,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/loans/{loan}/reverse-disbursement', [LoanController::class, 'reverseDisbursement'])->name('loans.reverse-disbursement');
         Route::post('/loans/{loan}/write-off', [LoanController::class, 'writeOff'])->name('loans.write-off');
         Route::post('/loans/{loan}/reschedule', [LoanController::class, 'reschedule'])->name('loans.reschedule');
+        Route::get('/loans/{loan}/schedule', [LoanController::class, 'schedule'])->name('loans.schedule');
         Route::post('/loans/{loan}/penalties', [LoanPenaltyController::class, 'store'])->name('loans.penalties.store');
         Route::post('/loans/{loan}/penalties/{penalty}/remove', [LoanPenaltyController::class, 'destroy'])->name('loans.penalties.destroy');
         Route::get('/loan-penalty-settings', [LoanPenaltySettingController::class, 'edit'])->name('loan-penalty-settings.edit');
@@ -270,10 +277,17 @@ Route::middleware(['auth'])->group(function () {
             Route::post('loan-classification/run', [LoanClassificationController::class, 'run'])->name('loan-classification.run');
             Route::get('prudential-returns', [PrudentialReportController::class, 'index'])->name('prudential-returns');
             Route::get('prudential-returns/pdf', [PrudentialReportController::class, 'downloadPdf'])->name('prudential-returns.pdf');
+            Route::get('officer-performance', [OfficerPerformanceController::class, 'index'])->name('officer-performance');
             Route::get('print-forms', [ReportController::class, 'showPrintForms'])->name('print-forms');
         });
 
         Route::get('activity-log', [ActivityLogController::class, 'index'])->name('activity-log.index');
+
+        Route::prefix('notifications')->name('notifications.')->group(function () {
+            Route::get('/', [NotificationController::class, 'index'])->name('index');
+            Route::post('{notification}/read', [NotificationController::class, 'markRead'])->name('markRead');
+            Route::post('mark-all-read', [NotificationController::class, 'markAllRead'])->name('markAllRead');
+        });
 
         // Settings & Staff
         Route::prefix('manager')->name('manager.')->group(function () {

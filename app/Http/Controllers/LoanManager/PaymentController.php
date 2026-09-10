@@ -9,6 +9,7 @@ use App\Models\MfiAccount;
 use App\Models\MfiProduct;
 use App\Models\MfiTransaction;
 use App\Services\JournalPoster;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -201,20 +202,43 @@ class PaymentController extends Controller
                 $totalDue = $loan->principal_amount + ($loan->principal_amount * ($loan->interest_rate / 100));
                 $paidSoFar = $loan->payments()->sum('amount_paid');
 
+                $justPaidOff = false;
                 if ($paidSoFar >= $totalDue && $loan->status !== 'paid') {
                     if ($isMfi && $loan->collateral_locked > 0) {
                         $this->releaseLoanCollateral($loan, $managerId);
                     }
                     $loan->status = 'paid';
                     $loan->save();
+                    $justPaidOff = true;
                 }
 
-                return ['payment' => $newPayment, 'compulsory_split' => $compulsorySplit];
+                return ['payment' => $newPayment, 'compulsory_split' => $compulsorySplit, 'loan' => $loan, 'just_paid_off' => $justPaidOff];
             });
 
             $message = 'Payment recorded successfully!';
             if ($result['compulsory_split'] > 0) {
                 $message .= ' ' . number_format($result['compulsory_split']) . ' was also added to the client\'s savings as a compulsory top-up.';
+            }
+
+            $loan = $result['loan'];
+            NotificationService::notify(
+                $managerId,
+                'payment_received',
+                'Payment received on loan #' . $loan->id,
+                ($loan->client?->name ?? 'Client') . ' paid ' . number_format($result['payment']->amount_paid) . ' towards loan #' . $loan->id . '.',
+                $loan->client_id,
+                route('loans.show', $loan->id)
+            );
+
+            if ($result['just_paid_off']) {
+                NotificationService::notify(
+                    $managerId,
+                    'loan_paid_off',
+                    'Loan #' . $loan->id . ' fully paid off',
+                    ($loan->client?->name ?? 'Client') . '\'s loan has been fully repaid.',
+                    $loan->client_id,
+                    route('loans.show', $loan->id)
+                );
             }
 
             return redirect()->route('payments.receipt', $result['payment']->id)

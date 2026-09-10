@@ -12,9 +12,14 @@ class RepaymentSchedule extends Model
 
     protected $fillable = [
         'loan_id',
+        'installment_number',
         'amount',
         'due_date',
         'status',
+    ];
+
+    protected $casts = [
+        'due_date' => 'date',
     ];
 
     public function loan(): BelongsTo

@@ -5,7 +5,10 @@
 @section('content')
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1>My Clients</h1>
-        <a href="{{ route('clients.create') }}" class="btn btn-primary">Add New Client</a>
+        <div>
+            <a href="{{ route('clients.import') }}" class="btn btn-outline-secondary me-2">Import Clients (CSV)</a>
+            <a href="{{ route('clients.create') }}" class="btn btn-primary">Add New Client</a>
+        </div>
     </div>
 
     @if (session('status'))

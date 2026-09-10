@@ -14,6 +14,8 @@ use App\Models\ChartOfAccount;
 use App\Models\JournalEntry;
 use App\Models\JournalEntryLine;
 use App\Models\LoanReschedule;
+use App\Services\NotificationService;
+use App\Services\RepaymentScheduleGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -362,6 +364,15 @@ class LoanController extends Controller implements HasMiddleware
             'approved_at' => now(),
         ]);
 
+        NotificationService::notify(
+            $loan->loan_manager_id,
+            'loan_approved',
+            'Loan #' . $loan->id . ' approved',
+            ($loan->client?->name ?? 'Client') . '\'s loan application was approved and is awaiting disbursement.',
+            $loan->client_id,
+            route('loans.show', $loan->id)
+        );
+
         return back()->with('success', 'Loan approved. It still needs to be disbursed before it goes active.');
     }
 
@@ -395,6 +406,15 @@ class LoanController extends Controller implements HasMiddleware
             ]);
         });
 
+        NotificationService::notify(
+            $loan->loan_manager_id,
+            'loan_rejected',
+            'Loan #' . $loan->id . ' rejected',
+            ($loan->client?->name ?? 'Client') . '\'s loan application was rejected.' . (!empty($validated['rejection_note']) ? ' Reason: ' . $validated['rejection_note'] : ''),
+            $loan->client_id,
+            route('loans.show', $loan->id)
+        );
+
         return back()->with('success', 'Loan application rejected.');
     }
 
@@ -424,7 +444,18 @@ class LoanController extends Controller implements HasMiddleware
                 'status' => 'active',
                 'disbursement_journal_entry_id' => $journalEntry?->id,
             ]);
+
+            RepaymentScheduleGenerator::generate($loan);
         });
+
+        NotificationService::notify(
+            $loan->loan_manager_id,
+            'loan_disbursed',
+            'Loan #' . $loan->id . ' disbursed',
+            ($loan->client?->name ?? 'Client') . '\'s loan of ' . number_format($loan->principal_amount) . ' was disbursed and is now active.',
+            $loan->client_id,
+            route('loans.show', $loan->id)
+        );
 
         return back()->with('success', 'Loan disbursed and marked active.' . ($loan->disbursement_journal_entry_id ? ' Journal entry posted.' : ''));
     }
@@ -479,6 +510,11 @@ class LoanController extends Controller implements HasMiddleware
                 'status' => 'pending',
                 'disbursement_journal_entry_id' => null,
             ]);
+
+            // The repayment schedule was generated off this (now-undone)
+            // disbursement's start date — clear it rather than leave a
+            // stale schedule sitting against a loan that isn't active.
+            $loan->repaymentSchedules()->delete();
         });
 
         return back()->with('success', 'Disbursement reversed. Loan is back to "approved, awaiting disbursement".');
@@ -536,6 +572,15 @@ class LoanController extends Controller implements HasMiddleware
                 'write_off_journal_entry_id' => $journalEntry?->id,
             ]);
         });
+
+        NotificationService::notify(
+            $loan->loan_manager_id,
+            'loan_written_off',
+            'Loan #' . $loan->id . ' written off',
+            ($loan->client?->name ?? 'Client') . '\'s loan was written off. Outstanding balance of ' . number_format($outstanding) . ' recorded as a loss.',
+            $loan->client_id,
+            route('loans.show', $loan->id)
+        );
 
         return back()->with('success', 'Loan written off. Outstanding balance of ' . number_format($outstanding) . ' recorded as a loss.');
     }
@@ -630,9 +675,59 @@ class LoanController extends Controller implements HasMiddleware
                 'repayment_frequency' => $validated['repayment_frequency'],
                 'start_date' => $validated['start_date'],
             ]);
+
+            RepaymentScheduleGenerator::generate($loan->fresh());
         });
 
         return redirect()->route('loans.show', $loan->id)->with('success', 'Loan rescheduled. Previous terms are kept on record below.');
+    }
+
+    /**
+     * Read-only view of a loan's installment-by-installment repayment
+     * schedule. Status per row is computed live from cumulative
+     * scheduled-vs-paid rather than trusting the stored 'status' column on
+     * each RepaymentSchedule row — a partial payment doesn't cleanly mark
+     * one installment "paid" and leave the rest "pending", so recomputing
+     * from actual payment totals avoids that row ever going stale.
+     */
+    public function schedule(Loan $loan)
+    {
+        if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
+
+        $installments = $loan->repaymentSchedules()->orderBy('installment_number')->get();
+        $totalPaid = $loan->payments()->sum('amount_paid');
+
+        $today = now()->toDateString();
+        $cumulativeDue = 0.0;
+        $rows = [];
+
+        foreach ($installments as $installment) {
+            $previousCumulativeDue = $cumulativeDue;
+            $cumulativeDue += (float) $installment->amount;
+
+            if ($totalPaid >= $cumulativeDue - 0.01) {
+                $status = 'Paid';
+            } elseif ($totalPaid > $previousCumulativeDue + 0.01) {
+                $status = 'Partially Paid';
+            } elseif ($installment->due_date->toDateString() < $today) {
+                $status = 'Overdue';
+            } else {
+                $status = 'Upcoming';
+            }
+
+            $rows[] = [
+                'installment' => $installment,
+                'cumulative_due' => $cumulativeDue,
+                'status' => $status,
+            ];
+        }
+
+        return view('loan-manager.loans.schedule', [
+            'loan' => $loan,
+            'rows' => $rows,
+            'totalPaid' => $totalPaid,
+            'totalScheduled' => $cumulativeDue,
+        ]);
     }
 
     /**

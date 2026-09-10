@@ -39,6 +39,11 @@
             <a href="{{ route('loans.downloadAgreement', $loan->id) }}" class="btn btn-dark shadow-sm ms-2" target="_blank">
                 <i class="fas fa-file-pdf"></i> Agreement
             </a>
+            @if($loan->approval_status === 'disbursed')
+                <a href="{{ route('loans.schedule', $loan->id) }}" class="btn btn-outline-primary shadow-sm ms-2">
+                    <i class="fas fa-calendar-alt"></i> Repayment Schedule
+                </a>
+            @endif
         </div>
     </div>
 

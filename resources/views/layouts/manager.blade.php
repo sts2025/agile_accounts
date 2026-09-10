@@ -164,6 +164,7 @@
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.loan-aging') ? 'active' : '' }}" href="{{ route('reports.loan-aging') }}">Loan Aging Report</a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.loan-classification') ? 'active' : '' }}" href="{{ route('reports.loan-classification') }}">Loan Classification & Provisioning</a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.prudential-returns') ? 'active' : '' }}" href="{{ route('reports.prudential-returns') }}">Prudential Returns</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.officer-performance') ? 'active' : '' }}" href="{{ route('reports.officer-performance') }}">Officer Performance</a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('activity-log.index') ? 'active' : '' }}" href="{{ route('activity-log.index') }}">Activity Log</a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('reports.print-forms') ? 'active' : '' }}" href="{{ route('reports.print-forms') }}">Print Forms</a></li>
                     </ul>
@@ -232,6 +233,35 @@
                         </div>
                     </div>
                     
+                    <div class="dropdown me-2">
+                        <button class="btn btn-light btn-sm rounded-circle shadow-sm position-relative" type="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-bell fs-5"></i>
+                            @if (($unreadNotificationCount ?? 0) > 0)
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.6rem;">
+                                    {{ $unreadNotificationCount > 9 ? '9+' : $unreadNotificationCount }}
+                                </span>
+                            @endif
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="min-width: 320px;">
+                            <li><h6 class="dropdown-header">Notifications</h6></li>
+                            @forelse (($recentNotifications ?? []) as $n)
+                                <li>
+                                    <form method="POST" action="{{ route('notifications.markRead', $n->id) }}">
+                                        @csrf
+                                        <button type="submit" class="dropdown-item small text-wrap {{ $n->read_at ? 'text-muted' : 'fw-bold' }}">
+                                            {{ $n->title }}
+                                            <div class="fw-normal small text-muted">{{ $n->created_at?->diffForHumans() }}</div>
+                                        </button>
+                                    </form>
+                                </li>
+                            @empty
+                                <li><span class="dropdown-item-text small text-muted">No notifications yet.</span></li>
+                            @endforelse
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item small text-center" href="{{ route('notifications.index') }}">View all</a></li>
+                        </ul>
+                    </div>
+
                     <div class="dropdown">
                         <button class="btn btn-light btn-sm rounded-circle shadow-sm" type="button" data-bs-toggle="dropdown">
                             <i class="bi bi-person-circle fs-5"></i>
