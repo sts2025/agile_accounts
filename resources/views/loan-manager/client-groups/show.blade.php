@@ -13,6 +13,12 @@
             @endif
         </div>
         <div class="d-flex gap-2">
+            <a href="{{ route('client-groups.collection-sheet', $group->id) }}" class="btn btn-outline-primary shadow-sm" target="_blank">
+                <i class="fas fa-clipboard-list me-2"></i> Collection Sheet
+            </a>
+            <a href="{{ route('client-groups.bulk-payment', $group->id) }}" class="btn btn-outline-success shadow-sm">
+                <i class="fas fa-hand-holding-usd me-2"></i> Record Group Payments
+            </a>
             <a href="{{ route('client-groups.edit', $group->id) }}" class="btn btn-secondary shadow-sm">
                 <i class="fas fa-edit me-2"></i> Edit Group
             </a>

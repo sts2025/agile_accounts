@@ -39,6 +39,7 @@ use App\Http\Controllers\LoanManager\ActivityLogController;
 use App\Http\Controllers\LoanManager\NotificationController;
 use App\Http\Controllers\LoanManager\OfficerPerformanceController;
 use App\Http\Controllers\LoanManager\ClientImportController;
+use App\Http\Controllers\LoanManager\GroupCollectionController;
 use App\Http\Controllers\LoanManager\ErrorCorrectionController;
 use App\Http\Controllers\LoanManager\MfiShareController;
 use App\Http\Controllers\LoanManager\MfiDividendController;
@@ -212,6 +213,9 @@ Route::middleware(['auth'])->group(function () {
 
         // Client Groups (group / joint-liability lending)
         Route::resource('client-groups', ClientGroupController::class);
+        Route::get('/client-groups/{clientGroup}/collection-sheet', [GroupCollectionController::class, 'collectionSheet'])->name('client-groups.collection-sheet');
+        Route::get('/client-groups/{clientGroup}/bulk-payment', [GroupCollectionController::class, 'bulkPaymentForm'])->name('client-groups.bulk-payment');
+        Route::post('/client-groups/{clientGroup}/bulk-payment', [GroupCollectionController::class, 'storeBulkPayment'])->name('client-groups.bulk-payment.store');
 
         // Loans
         Route::get('/loans/calculator', [LoanController::class, 'showCalculator'])->name('loans.showCalculator');

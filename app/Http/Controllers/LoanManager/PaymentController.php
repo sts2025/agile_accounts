@@ -6,10 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use App\Models\Loan;
 use App\Models\MfiAccount;
-use App\Models\MfiProduct;
 use App\Models\MfiTransaction;
 use App\Services\JournalPoster;
-use App\Services\NotificationService;
+use App\Services\PaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -64,181 +63,14 @@ class PaymentController extends Controller
             'pay_from_savings' => 'nullable|boolean',
         ]);
 
-        // Auto-calculate total amount based on the split
-        $totalAmount = $validated['principal_paid'] + $validated['interest_paid'];
-
-        if ($totalAmount <= 0) {
-            return back()->with('error', 'Payment amount must be greater than zero.');
-        }
-
-        // Only MFI tenants can pay from savings; ignore the flag otherwise.
-        $payFromSavings = $isMfi && $request->boolean('pay_from_savings');
+        $validated['pay_from_savings'] = $request->boolean('pay_from_savings');
 
         try {
-            $result = DB::transaction(function () use ($validated, $totalAmount, $managerId, $isMfi, $payFromSavings) {
-
-                $receiptNumber = !empty($validated['reference_id'])
-                                    ? $validated['reference_id']
-                                    : 'RCP-' . time() . rand(10, 99);
-
-                $loan = Loan::with('client')->lockForUpdate()->find($validated['loan_id']);
-
-                if (!$loan || $loan->loan_manager_id !== $managerId) {
-                    throw new \Exception('Loan not found.');
-                }
-
-                $savingsAccount = null;
-
-                // --- Repayment from savings: verify funds before touching anything ---
-                if ($payFromSavings) {
-                    $savingsAccount = MfiAccount::where('loan_manager_id', $managerId)
-                        ->where('client_id', $loan->client_id)
-                        ->where('account_type', 'savings')
-                        ->where('status', 'active')
-                        ->lockForUpdate()
-                        ->first();
-
-                    if (!$savingsAccount) {
-                        throw new \Exception('This client has no active savings account to pay from.');
-                    }
-
-                    $available = $savingsAccount->balance - $savingsAccount->lien_amount;
-
-                    if ($totalAmount > $available) {
-                        throw new \Exception(
-                            'Insufficient savings balance. Available to withdraw: ' .
-                            number_format($available) .
-                            ($savingsAccount->lien_amount > 0 ? ' (' . number_format($savingsAccount->lien_amount) . ' locked as loan collateral).' : '.')
-                        );
-                    }
-                }
-
-                $newPayment = Payment::create([
-                    'loan_id'        => $validated['loan_id'],
-                    'payment_date'   => $validated['payment_date'],
-                    'amount_paid'    => $totalAmount,
-                    'principal_paid' => $validated['principal_paid'],
-                    'interest_paid'  => $validated['interest_paid'],
-                    'payment_method' => $payFromSavings ? 'Savings Wallet' : $validated['payment_method'],
-                    'receipt_number' => $receiptNumber,
-                    'notes'          => $validated['notes'] ?? null,
-                ]);
-
-                // Cash-funded repayments bring new cash in the door; wallet
-                // repayments just move an existing liability (savings) down
-                // against the loan portfolio — no cash line for those.
-                $repaymentLines = [
-                    ['code' => $payFromSavings ? '2000' : '1000', 'debit' => $totalAmount, 'description' => $payFromSavings ? 'Debited from savings' : 'Cash received'],
-                    ['code' => '1100', 'credit' => $validated['principal_paid'], 'description' => 'Principal repaid'],
-                    ['code' => '4000', 'credit' => $validated['interest_paid'], 'description' => 'Interest income'],
-                ];
-                $repaymentEntry = JournalPoster::post($managerId, 'Loan repayment — receipt ' . $receiptNumber, 'loan_repayment', $repaymentLines, $receiptNumber);
-
-                if ($repaymentEntry) {
-                    $newPayment->update(['journal_entry_id' => $repaymentEntry->id]);
-                }
-
-                if ($payFromSavings) {
-                    $savingsAccount->decrement('balance', $totalAmount);
-
-                    MfiTransaction::create([
-                        'loan_manager_id' => $managerId,
-                        'client_id' => $loan->client_id,
-                        'mfi_account_id' => $savingsAccount->id,
-                        'transaction_type' => 'withdrawal',
-                        'amount' => $totalAmount,
-                        'credit' => 0,
-                        'debit' => $totalAmount,
-                        'transaction_date' => $validated['payment_date'],
-                        'payment_method' => 'Savings Wallet',
-                        'reference_number' => $receiptNumber,
-                        'narration' => 'Loan repayment paid from savings (Receipt: ' . $receiptNumber . ')',
-                    ]);
-                }
-
-                // --- Compulsory savings auto-split ---
-                // Only on cash-funded repayments: paying from savings and then
-                // immediately re-depositing a slice back into that same wallet
-                // would be a no-op.
-                $compulsorySplit = 0;
-                if ($isMfi && !$payFromSavings && $loan->mfi_loan_product_id) {
-                    $product = MfiProduct::find($loan->mfi_loan_product_id);
-                    $percent = $product ? $product->compulsory_savings_percent : 0;
-
-                    if ($percent > 0) {
-                        $splitAmount = round($totalAmount * $percent / 100, 2);
-
-                        if ($splitAmount > 0) {
-                            $compulsoryAccount = $this->resolveSavingsAccount($managerId, $loan->client_id);
-                            $compulsoryAccount->increment('balance', $splitAmount);
-
-                            MfiTransaction::create([
-                                'loan_manager_id' => $managerId,
-                                'client_id' => $loan->client_id,
-                                'mfi_account_id' => $compulsoryAccount->id,
-                                'transaction_type' => 'deposit',
-                                'amount' => $splitAmount,
-                                'credit' => $splitAmount,
-                                'debit' => 0,
-                                'transaction_date' => $validated['payment_date'],
-                                'payment_method' => $validated['payment_method'],
-                                'narration' => 'Compulsory savings on loan repayment (Receipt: ' . $receiptNumber . ')',
-                            ]);
-
-                            JournalPoster::post($managerId, 'Compulsory savings top-up — receipt ' . $receiptNumber, 'compulsory_savings', [
-                                ['code' => '1000', 'debit' => $splitAmount, 'description' => 'Cash received'],
-                                ['code' => '2000', 'credit' => $splitAmount, 'description' => 'Compulsory savings top-up'],
-                            ], $receiptNumber);
-
-                            $compulsorySplit = $splitAmount;
-                        }
-                    }
-                }
-
-                // --- Loan payoff + collateral release ---
-                // Uses the same lien-release logic as LoanController's manual
-                // status toggle, so a loan paid off through the normal
-                // repayment screen also frees up any locked savings collateral.
-                $totalDue = $loan->principal_amount + ($loan->principal_amount * ($loan->interest_rate / 100));
-                $paidSoFar = $loan->payments()->sum('amount_paid');
-
-                $justPaidOff = false;
-                if ($paidSoFar >= $totalDue && $loan->status !== 'paid') {
-                    if ($isMfi && $loan->collateral_locked > 0) {
-                        $this->releaseLoanCollateral($loan, $managerId);
-                    }
-                    $loan->status = 'paid';
-                    $loan->save();
-                    $justPaidOff = true;
-                }
-
-                return ['payment' => $newPayment, 'compulsory_split' => $compulsorySplit, 'loan' => $loan, 'just_paid_off' => $justPaidOff];
-            });
+            $result = PaymentService::record($managerId, $isMfi, $validated);
 
             $message = 'Payment recorded successfully!';
             if ($result['compulsory_split'] > 0) {
                 $message .= ' ' . number_format($result['compulsory_split']) . ' was also added to the client\'s savings as a compulsory top-up.';
-            }
-
-            $loan = $result['loan'];
-            NotificationService::notify(
-                $managerId,
-                'payment_received',
-                'Payment received on loan #' . $loan->id,
-                ($loan->client?->name ?? 'Client') . ' paid ' . number_format($result['payment']->amount_paid) . ' towards loan #' . $loan->id . '.',
-                $loan->client_id,
-                route('loans.show', $loan->id)
-            );
-
-            if ($result['just_paid_off']) {
-                NotificationService::notify(
-                    $managerId,
-                    'loan_paid_off',
-                    'Loan #' . $loan->id . ' fully paid off',
-                    ($loan->client?->name ?? 'Client') . '\'s loan has been fully repaid.',
-                    $loan->client_id,
-                    route('loans.show', $loan->id)
-                );
             }
 
             return redirect()->route('payments.receipt', $result['payment']->id)
@@ -247,72 +79,6 @@ class PaymentController extends Controller
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage())->withInput();
         }
-    }
-
-    /**
-     * Find the client's active savings account, or auto-provision a default
-     * one if they don't have one yet (mirrors SavingsController's fallback
-     * so the compulsory savings split always has somewhere to land).
-     */
-    private function resolveSavingsAccount(int $managerId, int $clientId): MfiAccount
-    {
-        $account = MfiAccount::where('loan_manager_id', $managerId)
-            ->where('client_id', $clientId)
-            ->where('account_type', 'savings')
-            ->where('status', 'active')
-            ->lockForUpdate()
-            ->first();
-
-        if ($account) {
-            return $account;
-        }
-
-        $product = MfiProduct::where('loan_manager_id', $managerId)
-            ->where('product_type', 'savings')
-            ->first();
-
-        $productId = $product?->id ?? MfiProduct::create([
-            'loan_manager_id' => $managerId,
-            'name' => 'Standard Daily Savings',
-            'product_type' => 'savings',
-            'interest_rate' => 0,
-            'rules' => ['minimum_balance' => 0, 'is_compulsory' => false, 'allow_withdrawals' => true],
-            'is_active' => true,
-        ])->id;
-
-        return MfiAccount::create([
-            'loan_manager_id' => $managerId,
-            'client_id' => $clientId,
-            'mfi_product_id' => $productId,
-            'account_number' => 'SAV-' . time() . rand(10, 99),
-            'account_type' => 'savings',
-            'balance' => 0,
-            'status' => 'active',
-        ]);
-    }
-
-    /**
-     * Release the exact amount of collateral this loan locked, back onto the
-     * client's savings account. Mirrors LoanController::releaseLoanCollateral
-     * so a loan paid off via the normal repayment screen (not just the
-     * separate status-toggle button) also frees its lien. Caller is
-     * responsible for saving $loan afterwards.
-     */
-    private function releaseLoanCollateral(Loan $loan, int $managerId): void
-    {
-        $savingsAccount = MfiAccount::where('loan_manager_id', $managerId)
-            ->where('client_id', $loan->client_id)
-            ->where('account_type', 'savings')
-            ->where('status', 'active')
-            ->lockForUpdate()
-            ->first();
-
-        if ($savingsAccount) {
-            $release = min($loan->collateral_locked, $savingsAccount->lien_amount);
-            $savingsAccount->decrement('lien_amount', $release);
-        }
-
-        $loan->collateral_locked = 0;
     }
 
     /**
