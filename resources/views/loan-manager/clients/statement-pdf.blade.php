@@ -86,12 +86,12 @@
         $companyPhone = !empty($manager->company_phone) ? $manager->company_phone : (!empty($manager->phone_number) ? $manager->phone_number : 'N/A');
         $companyAddress = !empty($manager->company_address) ? $manager->company_address : (!empty($manager->address) ? $manager->address : 'N/A');
         $companyEmail = !empty($manager->company_email) ? $manager->company_email : Auth::user()->email;
-        $companyLogo = !empty($manager->company_logo) ? $manager->company_logo : (!empty($manager->company_logo_path) ? $manager->company_logo_path : null);
+        $companyLogo = $manager->logoDataUri();
     @endphp
 
     <div class="header-section">
         @if($companyLogo)
-            <img src="{{ asset('storage/' . $companyLogo) }}" alt="Company Logo" class="company-logo">
+            <img src="{{ $companyLogo }}" alt="Company Logo" class="company-logo">
         @endif
         <h1 class="company-name">{{ $companyName }}</h1>
         <div class="company-details">

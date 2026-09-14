@@ -44,6 +44,20 @@
                     <i class="fas fa-calendar-alt"></i> Repayment Schedule
                 </a>
             @endif
+            @if($loan->approval_status === 'pending')
+                <a href="{{ route('loans.edit', $loan->id) }}" class="btn btn-outline-secondary shadow-sm ms-2">
+                    <i class="fas fa-edit"></i> Edit
+                </a>
+            @endif
+            @if($loan->approval_status !== 'disbursed')
+                <form method="POST" action="{{ route('loans.destroy', $loan->id) }}" class="d-inline" onsubmit="return confirm('Delete this loan application? This cannot be undone.');">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="btn btn-outline-danger shadow-sm ms-2">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                </form>
+            @endif
         </div>
     </div>
 

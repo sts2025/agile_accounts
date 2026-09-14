@@ -870,31 +870,52 @@ class LoanController extends Controller implements HasMiddleware
     }
 
     /**
-     * Show edit loan form.
+     * Show edit loan form. Only for applications still awaiting approval —
+     * see update() for why editing stops there.
      */
     public function edit(Loan $loan)
     {
         if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
+
+        if ($loan->approval_status !== 'pending') {
+            return redirect()->route('loans.show', $loan->id)
+                ->with('error', 'Only a pending application can be edited directly. Use Reschedule, Write Off, or Reverse Disbursement instead.');
+        }
+
         return view('loan-manager.loans.edit', compact('loan'));
     }
 
     /**
-     * Update loan record.
+     * Update loan record. Deliberately restricted to applications that
+     * haven't been approved yet — once approved/disbursed, a loan has (or
+     * is about to have) journal entries, a repayment schedule, and
+     * possibly payments built on top of its current terms. Free-editing
+     * principal/rate/term at that point would silently desync all of that
+     * from what was actually disbursed/posted; reschedule() exists
+     * specifically to change terms on a live loan with a proper audit
+     * trail instead. Status is no longer editable here at all — it must
+     * only ever change through the approve/disburse/writeOff/reverse
+     * actions, never a free dropdown, so every other report that reads
+     * status/approval_status together can trust they're always in sync.
      */
     public function update(Request $request, Loan $loan)
     {
         if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
-        
+
+        if ($loan->approval_status !== 'pending') {
+            return redirect()->route('loans.show', $loan->id)
+                ->with('error', 'Only a pending application can be edited directly. Use Reschedule, Write Off, or Reverse Disbursement instead.');
+        }
+
         $validatedData = $request->validate([
             'principal_amount' => 'required|numeric|min:0',
             'interest_rate' => 'required|numeric|min:0',
             'term' => 'required|integer|min:1',
             'repayment_frequency' => 'required|string|in:Daily,Weekly,Monthly',
             'start_date' => 'required|date',
-            'status' => 'required|string|in:pending,active,paid,defaulted',
         ]);
         $loan->update($validatedData);
-        return redirect()->route('loans.show', $loan->id)->with('status', 'Loan details have been updated successfully!');
+        return redirect()->route('loans.show', $loan->id)->with('status', 'Loan application details have been updated successfully!');
     }
 
     /**

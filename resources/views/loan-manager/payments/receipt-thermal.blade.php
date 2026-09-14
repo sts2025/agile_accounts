@@ -143,7 +143,7 @@
         $companyPhone = $manager->company_phone ?? $manager->phone_number ?? 'N/A';
         $companyAddress = $manager->company_address ?? $manager->address ?? 'Main Branch';
         $companyEmail = $manager->company_email ?? null;
-        $companyLogo = $manager->company_logo ?? null;
+        $companyLogo = $manager->logoDataUri();
     @endphp
 
     <div class="receipt-wrapper">
@@ -152,7 +152,7 @@
         <div class="header text-center">
             {{-- Dynamic Logo --}}
             @if($companyLogo)
-                <img src="{{ asset('storage/' . $companyLogo) }}" alt="Logo" class="logo">
+                <img src="{{ $companyLogo }}" alt="Logo" class="logo">
             @endif
 
             {{-- Company Name --}}

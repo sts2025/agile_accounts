@@ -83,9 +83,9 @@
                         <div class="mb-4">
                             <label class="form-label fw-bold">Company Logo (Optional)</label>
                             <input type="file" name="company_logo" class="form-control">
-                            @if($manager->company_logo)
+                            @if($manager->logoDataUri())
                                 <div class="mt-2 p-2 border rounded d-inline-block">
-                                    <img src="{{ asset('storage/' . $manager->company_logo) }}" alt="Logo" style="height: 50px;">
+                                    <img src="{{ $manager->logoDataUri() }}" alt="Logo" style="height: 50px;">
                                 </div>
                             @endif
                         </div>
@@ -105,8 +105,8 @@
                     </div>
                     <div class="card-body text-center bg-light py-5">
                         <div class="receipt-mockup border p-3 bg-white shadow-sm mx-auto" style="max-width: 250px; font-family: monospace;">
-                            @if($manager->company_logo)
-                                <img src="{{ asset('storage/' . $manager->company_logo) }}" style="max-width: 60px;" class="mb-2">
+                            @if($manager->logoDataUri())
+                                <img src="{{ $manager->logoDataUri() }}" style="max-width: 60px;" class="mb-2">
                             @else
                                 <i class="fas fa-store fa-2x text-muted mb-2"></i>
                             @endif

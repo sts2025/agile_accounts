@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 // *** NOTE: The 'HasMany' and 'Account' imports for the broken function are gone. ***
 
 class LoanManager extends Model
@@ -19,8 +20,11 @@ class LoanManager extends Model
         'subscription_ends_at',
         'company_name',
         'company_phone',
+        'company_email',
+        'company_address',
         'company_logo_path',
-        'currency_symbol', 
+        'opening_balance',
+        'currency_symbol',
         'support_phone',
     ];
 
@@ -51,6 +55,38 @@ class LoanManager extends Model
     public static function getGlobalSupportPhone()
     {
         return '0740859082'; // Default
+    }
+
+    /**
+     * The company logo as an inline base64 data URI, rather than a
+     * public/storage/... URL. Print forms (loan agreement, client
+     * statement, savings passbook, thermal receipt) all embed the logo
+     * this way instead: it works regardless of whether the storage
+     * symlink (php artisan storage:link) exists on a given hosting setup,
+     * which has been a recurring source of "images don't show up" issues
+     * on shared hosting. Returns null (caller should hide the <img> tag
+     * entirely) if there's no logo set or the file can't be read.
+     */
+    public function logoDataUri(): ?string
+    {
+        if (empty($this->company_logo_path)) {
+            return null;
+        }
+
+        try {
+            $disk = Storage::disk('public');
+
+            if (!$disk->exists($this->company_logo_path)) {
+                return null;
+            }
+
+            $mime = $disk->mimeType($this->company_logo_path) ?: 'image/png';
+            $contents = $disk->get($this->company_logo_path);
+
+            return 'data:' . $mime . ';base64,' . base64_encode($contents);
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     // *** THIS IS THE FIX: ***

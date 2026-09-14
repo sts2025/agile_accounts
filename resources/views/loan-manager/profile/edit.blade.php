@@ -79,9 +79,9 @@
                         <div class="form-group">
                             <label class="font-weight-bold">Company Logo</label>
                             <input type="file" name="company_logo" class="form-control-file">
-                            @if($manager->company_logo_path)
+                            @if($manager->logoDataUri())
                                 <div class="mt-2 p-1 border rounded d-inline-block bg-light">
-                                    <img src="{{ asset('storage/' . $manager->company_logo_path) }}" alt="Logo" style="height: 40px;">
+                                    <img src="{{ $manager->logoDataUri() }}" alt="Logo" style="height: 40px;">
                                 </div>
                             @endif
                         </div>

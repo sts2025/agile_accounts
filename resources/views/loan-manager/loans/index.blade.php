@@ -20,7 +20,13 @@
             {{ session('status') }}
         </div>
     @endif
-    
+
+    @if (session('error'))
+        <div class="alert alert-danger">
+            {{ session('error') }}
+        </div>
+    @endif
+
     <div id="status-message-container"></div>
 
     <div class="card mb-4">
@@ -164,7 +170,16 @@
                                         @endif
 
                                         <a href="{{ route('loans.show', $loan->id) }}" class="btn btn-info text-white" title="View"><i class="fas fa-eye"></i></a>
-                                        <a href="{{ route('loans.edit', $loan->id) }}" class="btn btn-secondary" title="Edit"><i class="fas fa-edit"></i></a>
+                                        @if($loan->approval_status === 'pending')
+                                            <a href="{{ route('loans.edit', $loan->id) }}" class="btn btn-secondary" title="Edit"><i class="fas fa-edit"></i></a>
+                                        @endif
+                                        @if($loan->approval_status !== 'disbursed')
+                                            <form method="POST" action="{{ route('loans.destroy', $loan->id) }}" style="display:inline;" onsubmit="return confirm('Delete this loan application? This cannot be undone.');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="btn btn-outline-danger" title="Delete"><i class="fas fa-trash"></i></button>
+                                            </form>
+                                        @endif
                                     </div>
                                 </td>
                             </tr>

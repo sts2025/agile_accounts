@@ -8,6 +8,7 @@ use App\Models\Payment;
 use App\Models\CashTransaction;
 use App\Models\LoanManager;
 use App\Models\MfiTransaction;
+use App\Models\ChartOfAccount;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
@@ -251,9 +252,15 @@ class ReportController extends Controller
         // below — but the matching cash inflow was missing here, so every
         // fee-charging loan permanently threw the books off by exactly the
         // fee amount.
-        $feesCollected = $manager->loans()->where('start_date', '<=', $reportDate)->sum('processing_fee');
+        $feesCollected = $manager->loans()->where('approval_status', 'disbursed')->where('start_date', '<=', $reportDate)->sum('processing_fee');
 
-        $loansGiven = $manager->loans()->where('start_date', '<=', $reportDate)->sum('principal_amount');
+        // Only DISBURSED loans represent actual cash out the door — a
+        // pending or rejected application with a past start_date was
+        // previously counted here too (no approval_status filter at all),
+        // which understated cash on hand for any tenant with applications
+        // sitting in the pipeline. Matches the same filter $openLoans uses
+        // above for principal.
+        $loansGiven = $manager->loans()->where('approval_status', 'disbursed')->where('start_date', '<=', $reportDate)->sum('principal_amount');
         $expensesPaid = $manager->expenses()->where('expense_date', '<=', $reportDate)->sum('amount');
         $otherOutflows = $manager->cashTransactions()->where('type', 'outflow')->where('transaction_date', '<=', $reportDate)->sum('amount');
         $bankDeposits = $manager->bankTransactions()->where('type', 'Deposit')->where('deposit_date', '<=', $reportDate)->sum('amount');
@@ -286,12 +293,29 @@ class ReportController extends Controller
             - ($loansGiven + $expensesPaid + $otherOutflows + $bankDeposits + $mfiSavingsOut);
         $cashAtBank = $bankDeposits - $bankWithdrawals;
 
+        // Receivables/Payables here were previously hardcoded to 0 — this
+        // hand-rolled balance sheet has no other data source for "other
+        // amounts owed to/by the business" (no accrued-interest or
+        // unpaid-bills tracking exists elsewhere; interest income is
+        // deliberately recognised on a cash basis, per the Loan Portfolio
+        // comment above). The ledger-based Chart of Accounts DOES have a
+        // place for this though — codes 1900 (Other Assets) and 2900
+        // (Other Liabilities) are part of the standard seeded chart — so a
+        // manager can post a manual General Journal entry against either
+        // (e.g. "client owes X for a lost passbook fee", "we owe supplier Y")
+        // and have it actually show up here instead of always reading 0.
+        $receivables = ChartOfAccount::where('loan_manager_id', $manager->id)
+            ->where('code', '1900')
+            ->where('is_active', true)
+            ->first()
+            ?->balanceAsOf($reportDate) ?? 0;
+
         $assets = collect([
             (object)['name' => 'Loan Portfolio (Active)', 'balance' => $performingPrincipal],
             (object)['name' => 'Non-Performing Loans (Defaulted)', 'balance' => $nonPerformingPrincipal],
             (object)['name' => 'Cash At Hand', 'balance' => $cashOnHand],
             (object)['name' => 'Cash at Bank', 'balance' => $cashAtBank],
-            (object)['name' => 'Receivables', 'balance' => 0],
+            (object)['name' => 'Receivables', 'balance' => $receivables],
         ]);
         $totalAssets = $assets->sum('balance');
 
@@ -312,7 +336,11 @@ class ReportController extends Controller
         // as cash deposits/withdrawals — the client's balance grew either way.
         $mfiClientSavings = $mfiSavingsIn + $mfiInterestCredited - $mfiSavingsOut;
 
-        $payables = 0;
+        $payables = ChartOfAccount::where('loan_manager_id', $manager->id)
+            ->where('code', '2900')
+            ->where('is_active', true)
+            ->first()
+            ?->balanceAsOf($reportDate) ?? 0;
 
         $liabilities = collect([
             (object)['name' => 'Savings', 'balance' => $savings],
