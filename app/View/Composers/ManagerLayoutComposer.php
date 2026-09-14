@@ -31,7 +31,11 @@ class ManagerLayoutComposer
 
             if ($loanManager) {
                 $loanPayments = $loanManager->payments()->sum('amount_paid');
-                $loansDisbursed = $loanManager->loans()->sum('principal_amount');
+                // Despite the variable name, this previously summed every
+                // loan regardless of approval_status — a pending or
+                // rejected application isn't cash out the door. Same bug,
+                // same fix as the Balance Sheet/P&L/Daily Report/Dashboard.
+                $loansDisbursed = $loanManager->loans()->where('approval_status', 'disbursed')->sum('principal_amount');
                 $expenses = $loanManager->expenses()->sum('amount');
 
                 // Simple calculation

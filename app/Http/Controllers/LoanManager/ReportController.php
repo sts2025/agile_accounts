@@ -36,7 +36,11 @@ class ReportController extends Controller
         $manager = Auth::user()->loanManager;
         $reportDate = $request->input('date') ? Carbon::parse($request->input('date')) : Carbon::today();
         
-        $loansGiven = $manager->loans()->whereDate('start_date', $reportDate)->with('client')->get();
+        // Same fix as the Balance Sheet / P&L: only a DISBURSED loan actually
+        // moved cash out the door today. A pending/approved-but-undisbursed
+        // application with today's start_date was previously counted here
+        // too, overstating the day's cash-out reconciliation.
+        $loansGiven = $manager->loans()->where('approval_status', 'disbursed')->whereDate('start_date', $reportDate)->with('client')->get();
         $paymentsReceived = $manager->payments()->whereDate('payment_date', $reportDate)->with('loan.client')->get();
 
         $cashInflows = $manager->cashTransactions()->where('type', 'inflow')->whereDate('transaction_date', $reportDate)->get();
@@ -106,8 +110,13 @@ class ReportController extends Controller
         $payments = $manager->payments()->whereBetween('payment_date', [$startDate, $endDate])->get();
         $totalInterest = $payments->sum('interest_paid');
         
-        // 2. Processing Fees (Cash collected at loan creation)
-        $loans = $manager->loans()->whereBetween('start_date', [$startDate, $endDate])->get();
+        // 2. Processing Fees (Cash collected at loan disbursement). Only
+        // disbursed loans have actually had a fee collected — a pending or
+        // rejected application with a start_date in range was previously
+        // counted here too (no approval_status filter at all), inflating
+        // Net Profit with fee income that was never really received. Same
+        // bug, same fix as the Cash on Hand figures on the Balance Sheet.
+        $loans = $manager->loans()->where('approval_status', 'disbursed')->whereBetween('start_date', [$startDate, $endDate])->get();
         $totalProcessingFee = $loans->sum('processing_fee');
         
         $loanIncome = collect([

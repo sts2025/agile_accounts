@@ -41,8 +41,10 @@ class DashboardController extends Controller
         // Count Active & Defaulted Loans on the streets
         $activeLoansCount = $manager->loans()->whereIn('status', ['active', 'defaulted'])->count();
         
-        // Total Ever Loaned (Principal Only - Asset Transfer)
-        $totalLoanAmount = $manager->loans()->sum('principal_amount');
+        // Total Ever Loaned (Principal Only - Asset Transfer) — disbursed
+        // only, so this stat card doesn't include principal for loans
+        // still awaiting approval or that were rejected.
+        $totalLoanAmount = $manager->loans()->where('approval_status', 'disbursed')->sum('principal_amount');
 
         // --- NEW: ACTUAL REALIZED PROFIT (STRICT CASH ACCOUNTING) ---
         // Only calculates profit from Interest actually paid by clients
@@ -50,7 +52,11 @@ class DashboardController extends Controller
             $q->where('loan_manager_id', $managerId);
         })->sum('interest_paid');
         
-        $totalProcessingFees = $manager->loans()->sum('processing_fee');
+        // Only a DISBURSED loan actually had its fee collected — counting
+        // every loan regardless of approval_status (the previous behavior
+        // here) credited "profit" for fees on applications that are still
+        // pending or were rejected outright, inflating this headline figure.
+        $totalProcessingFees = $manager->loans()->where('approval_status', 'disbursed')->sum('processing_fee');
         $totalExpenses = Expense::where('loan_manager_id', $managerId)->sum('amount');
         
         // True Profit = (Interest Paid + Fees) - Expenses
@@ -73,8 +79,10 @@ class DashboardController extends Controller
         // A. OPENING BALANCE
         $openingBalance = $this->calculateCashBalance($manager, $reportDate->copy()->startOfDay(), true);
 
-        // B. DAILY MOVEMENTS (Display only)
-        $loansGivenToday = $manager->loans()->whereDate('start_date', $reportDate)->get();
+        // B. DAILY MOVEMENTS (Display only) — disbursed only, same reasoning
+        // as totalProcessingFees above: a pending/rejected application
+        // isn't cash out the door.
+        $loansGivenToday = $manager->loans()->where('approval_status', 'disbursed')->whereDate('start_date', $reportDate)->get();
         
         $paymentsReceivedToday = Payment::whereHas('loan', function($q) use ($managerId) {
             $q->where('loan_manager_id', $managerId);
@@ -91,7 +99,7 @@ class DashboardController extends Controller
         for ($i = 29; $i >= 0; $i--) {
             $date = Carbon::today()->subDays($i);
             $labels[] = $date->format('M d');
-            $loanData[] = $manager->loans()->whereDate('start_date', $date)->sum('principal_amount');
+            $loanData[] = $manager->loans()->where('approval_status', 'disbursed')->whereDate('start_date', $date)->sum('principal_amount');
             
             $paymentData[] = Payment::whereHas('loan', function($q) use ($managerId) {
                 $q->where('loan_manager_id', $managerId);
@@ -152,7 +160,13 @@ class DashboardController extends Controller
             ->sum('amount');
 
         // --- 3. MONEY GOING OUT (-) ---
+        // Disbursed only — this is the same fix applied to the Balance
+        // Sheet/P&L/Daily Report: an application still pending or since
+        // rejected never actually paid out, so it must not reduce cash on
+        // hand. This one matters most since it feeds both the dashboard's
+        // Opening Balance and Closing Stock figures directly.
         $loansGiven = Loan::where('loan_manager_id', $managerId)
+            ->where('approval_status', 'disbursed')
             ->where('start_date', $operator, $date)
             ->sum('principal_amount');
 
