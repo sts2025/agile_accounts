@@ -122,7 +122,10 @@
     @php
         // THE FIX: Force the system to prioritize the CURRENT logged-in business profile.
         // This stops the PDF from getting stuck on old data if the loan was migrated or created by a different admin account.
-        $manager = Auth::user()->getCompany() ?? Auth::user()->loanManager ?? $loan->loanManager;
+        // $loan->loanManager is belongsTo(User::class) (the tenant owner's
+        // User row, not the LoanManager profile) — hop one further via that
+        // User's own ->loanManager (hasOne LoanManager) to reach the profile.
+        $manager = Auth::user()->getCompany() ?? Auth::user()->loanManager ?? optional($loan->loanManager)->loanManager;
         
         $client = $loan->client;
         $currency = $manager->currency_symbol ?? 'UGX';

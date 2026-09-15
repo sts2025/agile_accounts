@@ -112,7 +112,12 @@
         
         // FIX: Forcefully get the current logged-in manager if the loan relationship fails
         // This ensures the custom settings you just saved are loaded.
-        $manager = $loan->loanManager ?? Auth::user()->loanManager; 
+        // Note: Loan::loanManager() actually returns the tenant's User record
+        // (belongsTo(User::class, 'loan_manager_id')), not the LoanManager
+        // profile — so we have to go one hop further via that User's own
+        // ->loanManager (hasOne LoanManager) relation to get the profile
+        // with company_name/logoDataUri()/etc.
+        $manager = optional($loan->loanManager)->loanManager ?? Auth::user()->loanManager;
         
         $currency = $manager->currency_symbol ?? 'UGX';
         
