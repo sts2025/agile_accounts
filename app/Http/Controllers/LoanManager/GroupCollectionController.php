@@ -137,12 +137,22 @@ class GroupCollectionController extends Controller
             }
 
             // Suggested principal/interest split for the pre-filled bulk
-            // payment form — same even-amortisation assumption the
-            // schedule generator itself uses, not a stored per-installment
-            // breakdown (the schedule only tracks a combined amount).
+            // payment form. Reducing-balance loans have a real per-
+            // installment breakdown (amortizationSchedule()) that declines
+            // over time, so use the row matching the next due installment
+            // when there is one; flat loans fall back to the same even
+            // split the schedule generator itself uses.
             $term = max((int) $loan->term, 1);
-            $suggestedPrincipal = round($loan->principal_amount / $term, 2);
-            $suggestedInterest = round(($loan->principal_amount * $loan->interest_rate / 100) / $term, 2);
+
+            if (($loan->interest_method ?? 'flat') === 'reducing_balance') {
+                $targetInstallment = $nextInstallment->installment_number ?? 1;
+                $period = collect($loan->amortizationSchedule())->firstWhere('installment', $targetInstallment);
+                $suggestedPrincipal = $period['principal'] ?? round($loan->principal_amount / $term, 2);
+                $suggestedInterest = $period['interest'] ?? 0;
+            } else {
+                $suggestedPrincipal = round($loan->principal_amount / $term, 2);
+                $suggestedInterest = round(($loan->principal_amount * $loan->interest_rate / 100) / $term, 2);
+            }
 
             return (object) [
                 'loan' => $loan,

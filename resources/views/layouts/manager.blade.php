@@ -209,6 +209,12 @@
             </li>
 
             <li class="nav-item">
+                <a class="nav-link {{ request()->routeIs('manager.branches.*') ? 'active' : '' }}" href="{{ route('manager.branches.index') }}">
+                    <i class="bi bi-diagram-3-fill me-2"></i> Branches
+                </a>
+            </li>
+
+            <li class="nav-item">
                 <a class="nav-link {{ request()->routeIs('manager.settings.*') ? 'active' : '' }}" href="{{ route('manager.settings.edit') }}">
                     <i class="bi bi-gear-wide-connected me-2"></i> Business Settings
                 </a>

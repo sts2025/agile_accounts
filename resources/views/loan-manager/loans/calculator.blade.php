@@ -38,6 +38,14 @@ $currency = \App\Models\LoanManager::getCurrency();
                             <option value="Monthly" {{ $frequency == 'Monthly' ? 'selected' : '' }}>Monthly</option>
                         </select>
                     </div>
+                    <div class="col-md-3">
+                        <label for="interest_method" class="form-label">Interest Method</label>
+                        <select name="interest_method" id="interest_method" class="form-control">
+                            <option value="flat" {{ ($interestMethod ?? 'flat') == 'flat' ? 'selected' : '' }}>Flat Rate</option>
+                            <option value="reducing_balance" {{ ($interestMethod ?? 'flat') == 'reducing_balance' ? 'selected' : '' }}>Reducing Balance</option>
+                        </select>
+                        <small class="text-muted">Reducing Balance: enter the rate per period, not a total.</small>
+                    </div>
                 </div>
                 <button type="submit" class="btn btn-success mt-3"><i class="fas fa-calculator me-2"></i> Calculate Schedule</button>
             </form>

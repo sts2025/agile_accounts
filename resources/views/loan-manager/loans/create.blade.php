@@ -84,17 +84,26 @@ $currency = optional(auth()->user()->manager)->currency_symbol ?? 'UGX';
                 </div>
                 
                 <div class="row">
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-3 mb-3">
                         <label for="interest_rate">Interest Rate (%) <span class="text-danger">*</span></label>
                         <input type="number" step="0.01" class="form-control" id="interest_rate" name="interest_rate" value="{{ old('interest_rate') }}" required>
                         @error('interest_rate') <div class="text-danger small">{{ $message }}</div> @enderror
                     </div>
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-3 mb-3">
+                        <label for="interest_method">Interest Method</label>
+                        <select class="form-control" id="interest_method" name="interest_method">
+                            <option value="flat" {{ old('interest_method', 'flat') == 'flat' ? 'selected' : '' }}>Flat Rate (charged once on full term)</option>
+                            <option value="reducing_balance" {{ old('interest_method') == 'reducing_balance' ? 'selected' : '' }}>Reducing Balance (per period, on outstanding balance)</option>
+                        </select>
+                        <small class="text-muted">For Reducing Balance, enter the rate <strong>per installment period</strong> (e.g. per month), not a total.</small>
+                        @error('interest_method') <div class="text-danger small">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-3 mb-3">
                         <label for="term">Loan Term (Periods) <span class="text-danger">*</span></label>
                         <input type="number" class="form-control" id="term" name="term" value="{{ old('term') }}" placeholder="e.g., 3, 6, 12" required>
                         @error('term') <div class="text-danger small">{{ $message }}</div> @enderror
                     </div>
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-3 mb-3">
                         <label for="repayment_frequency">Frequency <span class="text-danger">*</span></label>
                         <select class="form-control" id="repayment_frequency" name="repayment_frequency" required>
                             <option value="Monthly" {{ old('repayment_frequency') == 'Monthly' ? 'selected' : '' }}>Monthly</option>

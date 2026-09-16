@@ -47,6 +47,7 @@ use App\Http\Controllers\LoanManager\StatutoryReserveController;
 use App\Http\Controllers\LoanManager\MfiFixedDepositController;
 use App\Http\Controllers\LoanManager\MfiEndOfPeriodController;
 use App\Http\Controllers\LoanManager\SavingsController;
+use App\Http\Controllers\LoanManager\BranchController;
 
 // Explicitly bind {manager} to the User model
 Route::model('manager', User::class);
@@ -227,6 +228,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/loans/{loan}/reverse-disbursement', [LoanController::class, 'reverseDisbursement'])->name('loans.reverse-disbursement');
         Route::post('/loans/{loan}/write-off', [LoanController::class, 'writeOff'])->name('loans.write-off');
         Route::post('/loans/{loan}/reschedule', [LoanController::class, 'reschedule'])->name('loans.reschedule');
+        Route::get('/loans/{loan}/top-up', [LoanController::class, 'topUp'])->name('loans.top-up');
+        Route::post('/loans/{loan}/top-up', [LoanController::class, 'storeTopUp'])->name('loans.top-up.store');
         Route::get('/loans/{loan}/schedule', [LoanController::class, 'schedule'])->name('loans.schedule');
         Route::post('/loans/{loan}/penalties', [LoanPenaltyController::class, 'store'])->name('loans.penalties.store');
         Route::post('/loans/{loan}/penalties/{penalty}/remove', [LoanPenaltyController::class, 'destroy'])->name('loans.penalties.destroy');
@@ -301,6 +304,14 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/staff', [StaffController::class, 'index'])->name('staff.index');
             Route::post('/staff', [StaffController::class, 'store'])->name('staff.store');
             Route::delete('/staff/{id}', [StaffController::class, 'destroy'])->name('staff.destroy');
+
+            Route::prefix('branches')->name('branches.')->group(function () {
+                Route::get('/', [BranchController::class, 'index'])->name('index');
+                Route::post('/', [BranchController::class, 'store'])->name('store');
+                Route::put('/{branch}', [BranchController::class, 'update'])->name('update');
+                Route::post('/{branch}/toggle', [BranchController::class, 'toggle'])->name('toggle');
+                Route::delete('/{branch}', [BranchController::class, 'destroy'])->name('destroy');
+            });
         });
     });
 });

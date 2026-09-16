@@ -32,33 +32,68 @@ class RepaymentScheduleGenerator
 
         $loan->repaymentSchedules()->delete();
 
-        $baseInstallment = round($totalRepayable / $term, 2);
         $startDate = Carbon::parse($loan->start_date);
         $frequency = strtolower($loan->repayment_frequency ?? 'monthly');
+        $isReducingBalance = ($loan->interest_method ?? 'flat') === 'reducing_balance';
 
-        $runningTotal = 0.0;
+        // Processing fee is spread evenly across every installment either
+        // way — it isn't part of the amortization math, just added on top.
+        $feePerInstallment = round(($loan->processing_fee ?? 0) / $term, 2);
+
         $rows = [];
+        $runningTotal = 0.0;
 
-        for ($i = 1; $i <= $term; $i++) {
-            $dueDate = self::dueDateFor($startDate, $frequency, $i);
+        if ($isReducingBalance) {
+            // Declining installment amount: equal principal per period,
+            // interest only on what's still outstanding, so later
+            // installments are smaller than earlier ones.
+            foreach ($loan->amortizationSchedule() as $period) {
+                $dueDate = self::dueDateFor($startDate, $frequency, $period['installment']);
+                $amount = round($period['principal'] + $period['interest'] + $feePerInstallment, 2);
+                $runningTotal += $amount;
 
-            // Last installment absorbs any rounding remainder so the
-            // schedule's total always ties out exactly to scheduledRepayable().
-            $amount = $i === $term
-                ? round($totalRepayable - $runningTotal, 2)
-                : $baseInstallment;
+                $rows[] = [
+                    'loan_id' => $loan->id,
+                    'installment_number' => $period['installment'],
+                    'amount' => $amount,
+                    'due_date' => $dueDate->toDateString(),
+                    'status' => 'pending',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
 
-            $runningTotal += $amount;
+            // Rounding remainder (if any) is absorbed into the last row so
+            // the schedule always ties out exactly to scheduledRepayable().
+            if (!empty($rows)) {
+                $lastIndex = array_key_last($rows);
+                $rows[$lastIndex]['amount'] = round($rows[$lastIndex]['amount'] + ($totalRepayable - $runningTotal), 2);
+            }
+        } else {
+            // Flat-rate: even split across every installment, same as before.
+            $baseInstallment = round($totalRepayable / $term, 2);
 
-            $rows[] = [
-                'loan_id' => $loan->id,
-                'installment_number' => $i,
-                'amount' => $amount,
-                'due_date' => $dueDate->toDateString(),
-                'status' => 'pending',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
+            for ($i = 1; $i <= $term; $i++) {
+                $dueDate = self::dueDateFor($startDate, $frequency, $i);
+
+                // Last installment absorbs any rounding remainder so the
+                // schedule's total always ties out exactly to scheduledRepayable().
+                $amount = $i === $term
+                    ? round($totalRepayable - $runningTotal, 2)
+                    : $baseInstallment;
+
+                $runningTotal += $amount;
+
+                $rows[] = [
+                    'loan_id' => $loan->id,
+                    'installment_number' => $i,
+                    'amount' => $amount,
+                    'due_date' => $dueDate->toDateString(),
+                    'status' => 'pending',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
         }
 
         RepaymentSchedule::insert($rows);

@@ -95,6 +95,48 @@
                         </button>
                     </div>
                 </div>
+
+                {{-- SMS NOTIFICATIONS --}}
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3 bg-white">
+                        <h6 class="m-0 font-weight-bold text-primary">SMS Notifications</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small">
+                            Connect your own SMS account to automatically text clients when a payment is received, a loan is approved/disbursed, or a loan is paid off (based on each client's "Preferred Notification" setting). Leave this blank to skip SMS — nothing is sent until you fill it in.
+                        </p>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">SMS Provider</label>
+                            <select name="sms_provider" class="form-select">
+                                <option value="">-- Not configured --</option>
+                                <option value="africastalking" {{ old('sms_provider', $manager->sms_provider) == 'africastalking' ? 'selected' : '' }}>Africa's Talking</option>
+                                <option value="twilio" {{ old('sms_provider', $manager->sms_provider) == 'twilio' ? 'selected' : '' }}>Twilio</option>
+                                <option value="log" {{ old('sms_provider', $manager->sms_provider) == 'log' ? 'selected' : '' }}>Test mode (logs only, doesn't send)</option>
+                            </select>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Username <span class="text-muted fw-normal">(Africa's Talking)</span></label>
+                                <input type="text" name="sms_username" class="form-control" value="{{ old('sms_username', $manager->sms_username) }}">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Sender ID <span class="text-muted fw-normal">/ Twilio "From" number</span></label>
+                                <input type="text" name="sms_sender_id" class="form-control" value="{{ old('sms_sender_id', $manager->sms_sender_id) }}">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">API Key <span class="text-muted fw-normal">/ Twilio Account SID</span></label>
+                                <input type="text" name="sms_api_key" class="form-control" value="{{ old('sms_api_key', $manager->sms_api_key) }}">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">API Secret <span class="text-muted fw-normal">(Twilio Auth Token only)</span></label>
+                                <input type="password" name="sms_api_secret" class="form-control" value="{{ old('sms_api_secret', $manager->sms_api_secret) }}" autocomplete="new-password">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-outline-primary">
+                            <i class="fas fa-save me-2"></i> Save Changes
+                        </button>
+                    </div>
+                </div>
             </div>
 
             {{-- 3. RECEIPT PREVIEW --}}

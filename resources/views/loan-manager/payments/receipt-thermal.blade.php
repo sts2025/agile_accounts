@@ -112,19 +112,14 @@
         
         // FIX: Forcefully get the current logged-in manager if the loan relationship fails
         // This ensures the custom settings you just saved are loaded.
-        // Note: Loan::loanManager() actually returns the tenant's User record
-        // (belongsTo(User::class, 'loan_manager_id')), not the LoanManager
-        // profile — so we have to go one hop further via that User's own
-        // ->loanManager (hasOne LoanManager) relation to get the profile
-        // with company_name/logoDataUri()/etc.
-        $manager = optional($loan->loanManager)->loanManager ?? Auth::user()->loanManager;
+        $manager = $loan->loanManager ?? Auth::user()->loanManager;
         
         $currency = $manager->currency_symbol ?? 'UGX';
         
         // Financials
-        $calculatedInterest = optional($loan)->principal_amount * (optional($loan)->interest_rate / 100);
+        $calculatedInterest = optional($loan)->totalInterestDue();
         $interestAmount = optional($loan)->interest_amount ?? $calculatedInterest ?? 0;
-        
+
         $totalRepayable = optional($loan)->principal_amount + $interestAmount;
         $totalPaid = $payment->loan->payments->sum('amount_paid'); 
         $loan_balance = $totalRepayable - $totalPaid; 

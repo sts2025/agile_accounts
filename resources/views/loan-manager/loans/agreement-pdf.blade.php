@@ -122,14 +122,11 @@
     @php
         // THE FIX: Force the system to prioritize the CURRENT logged-in business profile.
         // This stops the PDF from getting stuck on old data if the loan was migrated or created by a different admin account.
-        // $loan->loanManager is belongsTo(User::class) (the tenant owner's
-        // User row, not the LoanManager profile) — hop one further via that
-        // User's own ->loanManager (hasOne LoanManager) to reach the profile.
-        $manager = Auth::user()->getCompany() ?? Auth::user()->loanManager ?? optional($loan->loanManager)->loanManager;
+        $manager = Auth::user()->getCompany() ?? Auth::user()->loanManager ?? $loan->loanManager;
         
         $client = $loan->client;
         $currency = $manager->currency_symbol ?? 'UGX';
-        $interest = $loan->interest_amount ?? ($loan->principal_amount * ($loan->interest_rate / 100));
+        $interest = $loan->interest_amount ?? $loan->totalInterestDue();
         $totalDue = $loan->principal_amount + $interest + ($loan->processing_fee ?? 0);
         
         // Strict mapping: Ensure we don't accidentally pull blank database fields
@@ -172,7 +169,7 @@
     <div class="section-header">LOAN DETAILS</div>
     <p><span class="label">Loan Amount (Principal):</span> {{ $currency }} {{ number_format($loan->principal_amount) }}</p>
     <p><span class="label">Processing Fee (One-time):</span> {{ $currency }} {{ number_format($loan->processing_fee ?? 0) }}</p>
-    <p><span class="label">Interest Amount:</span> {{ $currency }} {{ number_format($interest) }} ({{ $loan->interest_rate }}% Flat Rate)</p>
+    <p><span class="label">Interest Amount:</span> {{ $currency }} {{ number_format($interest) }} ({{ $loan->interest_rate }}% {{ ($loan->interest_method ?? 'flat') === 'reducing_balance' ? 'per period, Reducing Balance' : 'Flat Rate' }})</p>
     <p><span class="label">Total Amount to be Repaid:</span> <strong style="font-size: 14px;">{{ $currency }} {{ number_format($totalDue) }}</strong></p>
     <p><span class="label">Term:</span> {{ $loan->term ?? '____' }} {{ $loan->repayment_frequency ?? 'Months' }}</p>
     <p><span class="label">Disbursement Date:</span> {{ \Carbon\Carbon::parse($loan->start_date)->format('F d, Y') }}</p>

@@ -111,7 +111,8 @@ class ClientController extends Controller
     {
         $managerId = Auth::user()->loanManager->id;
         $staffMembers = \App\Models\User::where('loan_manager_id', $managerId)->where('role', 'cashier')->orderBy('name')->get();
-        return view('loan-manager.clients.create', compact('staffMembers'));
+        $branches = \App\Models\Branch::where('loan_manager_id', $managerId)->where('is_active', true)->orderBy('name')->get();
+        return view('loan-manager.clients.create', compact('staffMembers', 'branches'));
     }
 
     public function store(Request $request)
@@ -137,6 +138,7 @@ class ClientController extends Controller
             'business_registration_number' => 'nullable|string|max:100',
             'assigned_user_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('loan_manager_id', $managerId)],
             'preferred_notification_channel' => 'nullable|string|in:sms,email,none',
+            'branch_id' => ['nullable', 'integer', Rule::exists('branches', 'id')->where('loan_manager_id', $managerId)],
         ]);
 
         $validated['loan_manager_id'] = $managerId;
@@ -166,7 +168,8 @@ class ClientController extends Controller
     {
         $this->authorizeManager($client);
         $staffMembers = \App\Models\User::where('loan_manager_id', $client->loan_manager_id)->where('role', 'cashier')->orderBy('name')->get();
-        return view('loan-manager.clients.edit', compact('client', 'staffMembers'));
+        $branches = \App\Models\Branch::where('loan_manager_id', $client->loan_manager_id)->where('is_active', true)->orderBy('name')->get();
+        return view('loan-manager.clients.edit', compact('client', 'staffMembers', 'branches'));
     }
 
     public function update(Request $request, Client $client)
@@ -193,6 +196,7 @@ class ClientController extends Controller
             'business_registration_number' => 'nullable|string|max:100',
             'assigned_user_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('loan_manager_id', $managerId)],
             'preferred_notification_channel' => 'nullable|string|in:sms,email,none',
+            'branch_id' => ['nullable', 'integer', Rule::exists('branches', 'id')->where('loan_manager_id', $managerId)],
         ]);
 
         if ($request->hasFile('photo')) {
@@ -364,11 +368,10 @@ class ClientController extends Controller
 
         $loanTransactions = collect();
         foreach ($client->loans()->with('payments')->get() as $loan) {
-            $interest = $loan->principal_amount * ($loan->interest_rate / 100);
             $loanTransactions->push((object)[
                 'date' => $loan->start_date,
                 'description' => "Loan Disbursed (Ref: {$loan->reference_id})",
-                'debit' => $loan->principal_amount + $interest,
+                'debit' => $loan->principalInterestDue(),
                 'credit' => 0,
             ]);
             foreach ($loan->payments as $payment) {
@@ -406,11 +409,10 @@ class ClientController extends Controller
 
         $transactions = collect();
         foreach ($client->loans()->with('payments')->get() as $loan) {
-            $interest = $loan->principal_amount * ($loan->interest_rate / 100);
             $transactions->push((object)[
                 'date' => $loan->start_date,
                 'description' => "Loan Disbursed (ID: {$loan->id})",
-                'debit' => $loan->principal_amount + $interest,
+                'debit' => $loan->principalInterestDue(),
                 'credit' => 0
             ]);
             foreach ($loan->payments as $payment) {

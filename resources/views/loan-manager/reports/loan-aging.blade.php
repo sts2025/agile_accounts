@@ -36,7 +36,7 @@ $currency = \App\Models\LoanManager::getCurrency();
                     @forelse ($loans as $loan)
                         {{-- This loop requires overdue loans to have data. --}}
                         @php
-                            $totalInterest = $loan->principal_amount * ($loan->interest_rate / 100);
+                            $totalInterest = $loan->totalInterestDue();
                             $nextDueDate = $loan->repaymentSchedules->where('status', 'pending')->sortBy('due_date')->first()->due_date ?? 'N/A';
                         @endphp
                         <tr>

@@ -31,6 +31,7 @@
                                     <th>Name</th>
                                     <th>Email (Login ID)</th>
                                     <th>Role</th>
+                                    <th>Branch</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
@@ -40,6 +41,7 @@
                                     <td>{{ $user->name }}</td>
                                     <td>{{ $user->email }}</td>
                                     <td><span class="badge bg-info text-dark">Cashier</span></td>
+                                    <td>{{ $user->branch->name ?? '—' }}</td>
                                     <td>
                                         <form action="{{ route('manager.staff.destroy', $user->id) }}" method="POST" onsubmit="return confirm('Remove this cashier?');">
                                             @csrf
@@ -50,7 +52,7 @@
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="4" class="text-center text-muted">No cashiers added yet.</td>
+                                    <td colspan="5" class="text-center text-muted">No cashiers added yet.</td>
                                 </tr>
                                 @endforelse
                             </tbody>
@@ -83,6 +85,17 @@
                             <input type="text" name="password" class="form-control" value="12345678" required>
                             <small class="text-muted">Default: 12345678</small>
                         </div>
+                        @if($branches->isNotEmpty())
+                        <div class="mb-3">
+                            <label class="form-label">Branch <span class="text-muted small">(optional)</span></label>
+                            <select name="branch_id" class="form-select">
+                                <option value="">— Not assigned —</option>
+                                @foreach($branches as $branch)
+                                    <option value="{{ $branch->id }}">{{ $branch->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        @endif
                         <button type="submit" class="btn btn-success w-100">
                             <i class="fas fa-user-plus me-2"></i> Create Account
                         </button>

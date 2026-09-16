@@ -30,6 +30,9 @@
                     | Group: <a href="{{ route('client-groups.show', $loan->clientGroup->id) }}"><i class="fas fa-users"></i> {{ $loan->clientGroup->name }}</a>
                 @endif
             </p>
+            @if($loan->replaces_loan_id)
+                <p class="mb-0 text-muted small"><i class="fas fa-arrow-up text-success"></i> This is a top-up of <a href="{{ route('loans.show', $loan->replaces_loan_id) }}">Loan #{{ $loan->replaces_loan_id }}</a></p>
+            @endif
         </div>
         <div>
             <a href="{{ route('loans.index') }}" class="btn btn-secondary shadow-sm">
@@ -42,6 +45,16 @@
             @if($loan->approval_status === 'disbursed')
                 <a href="{{ route('loans.schedule', $loan->id) }}" class="btn btn-outline-primary shadow-sm ms-2">
                     <i class="fas fa-calendar-alt"></i> Repayment Schedule
+                </a>
+            @endif
+            @if($loan->approval_status === 'disbursed' && !in_array($loan->status, ['paid', 'written_off']) && !$loan->topUpLoan)
+                <a href="{{ route('loans.top-up', $loan->id) }}" class="btn btn-outline-success shadow-sm ms-2">
+                    <i class="fas fa-arrow-up"></i> Top Up
+                </a>
+            @endif
+            @if($loan->topUpLoan)
+                <a href="{{ route('loans.show', $loan->topUpLoan->id) }}" class="btn btn-outline-secondary shadow-sm ms-2">
+                    <i class="fas fa-link"></i> Topped up into Loan #{{ $loan->topUpLoan->id }}
                 </a>
             @endif
             @if($loan->approval_status === 'pending')
@@ -337,12 +350,11 @@
                         $currency = $manager->currency_symbol ?? 'UGX';
                         
                         $principal = $loan->principal_amount;
-                        // Calculate interest based on rate
-                        $calculatedInterest = $principal * ($loan->interest_rate / 100);
-                        // Use stored interest_amount if available, otherwise calculated
-                        $interest = $loan->interest_amount ?? $calculatedInterest;
-                        
-                        $totalDue = $principal + $interest;
+                        // Use stored interest_amount if available, otherwise the
+                        // model's own calc (flat or reducing-balance aware).
+                        $interest = $loan->interest_amount ?? $loan->totalInterestDue();
+
+                        $totalDue = $loan->principalInterestDue();
                         $totalPaid = $loan->payments->sum('amount_paid');
                         $balance = max(0, $totalDue - $totalPaid);
                         
@@ -355,7 +367,7 @@
                     </div>
 
                     <div class="d-flex justify-content-between mb-2">
-                        <span class="small text-uppercase text-muted fw-bold">Interest ({{ $loan->interest_rate }}%)</span>
+                        <span class="small text-uppercase text-muted fw-bold">Interest ({{ $loan->interest_rate }}% {{ ($loan->interest_method ?? 'flat') === 'reducing_balance' ? 'reducing' : 'flat' }})</span>
                         <span class="fw-bold">{{ number_format($interest) }} {{ $currency }}</span>
                     </div>
                     

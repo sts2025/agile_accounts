@@ -217,7 +217,7 @@ class PaymentController extends Controller
             $payment->delete();
 
             if ($loan && $loan->status === 'paid') {
-                $totalDue = $loan->principal_amount + ($loan->principal_amount * ($loan->interest_rate / 100));
+                $totalDue = $loan->principalInterestDue();
                 $remainingPaid = $loan->payments()->sum('amount_paid');
 
                 if ($remainingPaid < $totalDue) {

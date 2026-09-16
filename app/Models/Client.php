@@ -39,6 +39,7 @@ class Client extends Model
         'business_registration_number',
         'assigned_user_id',
         'preferred_notification_channel',
+        'branch_id',
     ];
 
     protected $casts = [
@@ -61,11 +62,24 @@ class Client extends Model
     }
 
     /**
-     * Get the manager that owns the client.
+     * Get the tenant (LoanManager profile) that owns the client.
+     *
+     * loan_manager_id stores loan_managers.id everywhere in this app (see
+     * LoanManager::clients()/loans()/etc., all hasMany(..., 'loan_manager_id', 'id')
+     * — the local key is the LoanManager's own id, not a users.id). This
+     * relation used to point at User::class, which happened to "work" only
+     * when a loan_managers.id coincidentally matched a users.id, and
+     * returned the wrong (or a bogus) record otherwise — e.g. crashing
+     * print/receipt views that call $client->loanManager->logoDataUri().
      */
     public function loanManager()
     {
-        return $this->belongsTo(User::class, 'loan_manager_id');
+        return $this->belongsTo(LoanManager::class, 'loan_manager_id');
+    }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     /**

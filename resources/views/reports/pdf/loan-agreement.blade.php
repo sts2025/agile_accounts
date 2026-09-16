@@ -55,12 +55,13 @@
     <div class="section">
         <h3>LOAN DETAILS</h3>
         @php
-            $totalInterest = $loan->principal_amount * ($loan->interest_rate / 100);
-            $totalRepayable = $loan->principal_amount + $totalInterest;
+            $totalInterest = $loan->totalInterestDue();
+            $totalRepayable = $loan->principalInterestDue();
+            $isReducingBalance = ($loan->interest_method ?? 'flat') === 'reducing_balance';
         @endphp
         <p><strong>Loan Amount (Principal):</strong> UGX {{ number_format($loan->principal_amount, 0) }}</p>
         <p><strong>Processing Fee (One-time):</strong> UGX {{ number_format($loan->processing_fee, 0) }}</p>
-        <p><strong>Interest Amount:</strong> UGX {{ number_format($totalInterest, 0) }} ({{$loan->interest_rate}}% Flat Rate)</p>
+        <p><strong>Interest Amount:</strong> UGX {{ number_format($totalInterest, 0) }} ({{$loan->interest_rate}}% {{ $isReducingBalance ? 'per period, Reducing Balance' : 'Flat Rate' }})</p>
         <p><strong>Total Amount to be Repaid:</strong> <strong>UGX {{ number_format($totalRepayable, 0) }}</strong></p>
         <p><strong>Term:</strong> {{ $loan->term }} {{ $loan->repayment_frequency }} payments</p>
         <p><strong>Disbursement Date:</strong> {{ \Carbon\Carbon::parse($loan->start_date)->format('F d, Y') }}</p>

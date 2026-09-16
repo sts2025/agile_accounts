@@ -17,6 +17,7 @@ class ExpenseCategory extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'loan_manager_id',
         'name',
         // 'description', // Add this if you have a description column
     ];

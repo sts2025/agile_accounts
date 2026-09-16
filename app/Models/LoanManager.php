@@ -26,6 +26,11 @@ class LoanManager extends Model
         'opening_balance',
         'currency_symbol',
         'support_phone',
+        'sms_provider',
+        'sms_api_key',
+        'sms_api_secret',
+        'sms_sender_id',
+        'sms_username',
     ];
 
     // ... (Your user(), clients(), loans(), etc. relationships are all correct) ...
@@ -35,6 +40,7 @@ class LoanManager extends Model
     public function clients() { return $this->hasMany(Client::class, 'loan_manager_id', 'id'); }
     public function loans() { return $this->hasMany(Loan::class, 'loan_manager_id', 'id'); }
     public function clientGroups() { return $this->hasMany(ClientGroup::class, 'loan_manager_id', 'id'); }
+    public function branches() { return $this->hasMany(Branch::class, 'loan_manager_id', 'id'); }
     public function chartOfAccounts() { return $this->hasMany(ChartOfAccount::class, 'loan_manager_id', 'id'); }
     public function journalEntries() { return $this->hasMany(JournalEntry::class, 'loan_manager_id', 'id'); }
     public function payments() { return $this->hasManyThrough(Payment::class, Loan::class); }

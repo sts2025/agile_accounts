@@ -12,7 +12,7 @@
             @foreach ($analyzedLoans as $index => $item)
                 @php
                     $loan = $item->loan;
-                    $totalInterest = $loan->principal_amount * ($loan->interest_rate / 100);
+                    $totalInterest = $loan->totalInterestDue();
                     $finalDueDate = \Carbon\Carbon::parse($loan->start_date);
                     switch ($loan->repayment_frequency) {
                         case 'Daily':   $finalDueDate->addDays($loan->term);   break;

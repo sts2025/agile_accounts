@@ -32,6 +32,11 @@ class BusinessSettingsController extends Controller
             'company_address' => 'nullable|string|max:500',
             'company_logo'    => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
             'opening_balance' => 'nullable|numeric|min:0',
+            'sms_provider'    => 'nullable|string|in:africastalking,twilio,log',
+            'sms_api_key'     => 'nullable|string|max:255',
+            'sms_api_secret'  => 'nullable|string|max:255',
+            'sms_sender_id'   => 'nullable|string|max:30',
+            'sms_username'    => 'nullable|string|max:100',
         ]);
 
         // Handle Logo Upload
@@ -57,7 +62,14 @@ class BusinessSettingsController extends Controller
         
         // Save the Opening Balance
         $manager->opening_balance = $validated['opening_balance'] ?? 0;
-        
+
+        // SMS gateway (own account per tenant — see SmsService)
+        $manager->sms_provider = $validated['sms_provider'] ?? null;
+        $manager->sms_api_key = $validated['sms_api_key'] ?? null;
+        $manager->sms_api_secret = $validated['sms_api_secret'] ?? null;
+        $manager->sms_sender_id = $validated['sms_sender_id'] ?? null;
+        $manager->sms_username = $validated['sms_username'] ?? null;
+
         $manager->save();
 
         return back()->with('success', 'Business settings and Opening Balance updated successfully!');

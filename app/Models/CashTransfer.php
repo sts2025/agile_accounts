@@ -18,10 +18,12 @@ class CashTransfer extends Model
     ];
 
     /**
-     * Get the user (manager) who recorded the transfer.
+     * The tenant (LoanManager profile) this transfer belongs to.
+     * loan_manager_id stores loan_managers.id, same convention as
+     * everywhere else — see LoanManager::cashTransfers().
      */
     public function loanManager()
     {
-        return $this->belongsTo(User::class, 'loan_manager_id');
+        return $this->belongsTo(LoanManager::class, 'loan_manager_id');
     }
 }

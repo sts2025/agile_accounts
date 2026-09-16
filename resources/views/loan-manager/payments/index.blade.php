@@ -113,7 +113,7 @@
                                 <option value="{{ $loan->id }}"
                                     @if($isMfi) data-savings-available="{{ $loan->savings_available ?? '' }}" @endif>
                                     {{ $loan->client->name }}
-                                    (Bal: {{ number_format($loan->principal_amount + ($loan->principal_amount * ($loan->interest_rate/100)) - $loan->payments->sum('amount_paid')) }})
+                                    (Bal: {{ number_format($loan->principalInterestDue() - $loan->payments->sum('amount_paid')) }})
                                 </option>
                             @endforeach
                         </select>

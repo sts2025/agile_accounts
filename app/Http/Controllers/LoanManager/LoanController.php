@@ -14,6 +14,7 @@ use App\Models\ChartOfAccount;
 use App\Models\JournalEntry;
 use App\Models\JournalEntryLine;
 use App\Models\LoanReschedule;
+use App\Models\Payment;
 use App\Services\NotificationService;
 use App\Services\RepaymentScheduleGenerator;
 use Illuminate\Http\Request;
@@ -143,8 +144,9 @@ class LoanController extends Controller implements HasMiddleware
             'mfi_loan_product_id' => ['nullable', Rule::exists('mfi_products', 'id')->where('loan_manager_id', $loanManagerId)->where('product_type', 'loan')],
             'principal_amount' => 'required|numeric|min:100',
             'processing_fee' => 'nullable|numeric|min:0', 
-            'interest_rate' => 'required|numeric|min:0|max:100', 
-            'term' => 'required|integer|min:1', 
+            'interest_rate' => 'required|numeric|min:0|max:100',
+            'interest_method' => 'nullable|string|in:flat,reducing_balance',
+            'term' => 'required|integer|min:1',
             'repayment_frequency' => 'required|string|in:Daily,Weekly,Monthly',
             'start_date' => 'required|date', 
 
@@ -168,17 +170,21 @@ class LoanController extends Controller implements HasMiddleware
         }
 
         try {
-            DB::transaction(function () use ($validatedData, $request, $loanManagerId) {
+            DB::transaction(function () use ($validatedData, $request, $loanManagerId, $client) {
                 $loanCount = Loan::where('loan_manager_id', $loanManagerId)->count();
 
                 $loan = Loan::create([
                     'client_id' => $validatedData['client_id'],
                     'client_group_id' => $validatedData['client_group_id'] ?? null,
                     'loan_manager_id' => $loanManagerId,
+                    // Loans inherit their client's branch — a loan doesn't
+                    // move offices independently of the person who took it.
+                    'branch_id' => $client->branch_id ?? null,
                     'mfi_loan_product_id' => $validatedData['mfi_loan_product_id'] ?? null,
                     'principal_amount' => $validatedData['principal_amount'],
                     'processing_fee' => $validatedData['processing_fee'] ?? 0,
                     'interest_rate' => $validatedData['interest_rate'],
+                    'interest_method' => $validatedData['interest_method'] ?? 'flat',
                     'term' => $validatedData['term'],
                     'repayment_frequency' => $validatedData['repayment_frequency'],
                     'start_date' => $validatedData['start_date'],
@@ -370,7 +376,8 @@ class LoanController extends Controller implements HasMiddleware
             'Loan #' . $loan->id . ' approved',
             ($loan->client?->name ?? 'Client') . '\'s loan application was approved and is awaiting disbursement.',
             $loan->client_id,
-            route('loans.show', $loan->id)
+            route('loans.show', $loan->id),
+            'Good news! Your loan application (#' . $loan->id . ') has been approved. We\'ll be in touch about disbursement.'
         );
 
         return back()->with('success', 'Loan approved. It still needs to be disbursed before it goes active.');
@@ -436,6 +443,13 @@ class LoanController extends Controller implements HasMiddleware
 
         $managerId = Auth::user()->loanManager->id;
 
+        // Top-up/restructure: this loan is replacing an older one — settle
+        // that loan's remaining balance out of the new proceeds instead of
+        // the usual "full principal out the door" disbursement.
+        if ($loan->replaces_loan_id) {
+            return $this->disburseTopUp($loan, $managerId);
+        }
+
         DB::transaction(function () use ($loan, $managerId) {
             $journalEntry = $this->postDisbursementJournalEntry($loan, $managerId);
 
@@ -454,10 +468,90 @@ class LoanController extends Controller implements HasMiddleware
             'Loan #' . $loan->id . ' disbursed',
             ($loan->client?->name ?? 'Client') . '\'s loan of ' . number_format($loan->principal_amount) . ' was disbursed and is now active.',
             $loan->client_id,
-            route('loans.show', $loan->id)
+            route('loans.show', $loan->id),
+            'Your loan #' . $loan->id . ' of ' . \App\Models\LoanManager::getCurrency() . ' ' . number_format($loan->principal_amount) . ' has been disbursed. Repayments start ' . \Carbon\Carbon::parse($loan->start_date)->format('d M Y') . '.'
         );
 
         return back()->with('success', 'Loan disbursed and marked active.' . ($loan->disbursement_journal_entry_id ? ' Journal entry posted.' : ''));
+    }
+
+    /**
+     * Show the top-up/restructure form for an existing disbursed loan: the
+     * client's old balance is netted off the new loan's proceeds at
+     * disbursement instead of requiring a full separate repayment first.
+     */
+    public function topUp(Loan $loan)
+    {
+        if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
+
+        if ($loan->approval_status !== 'disbursed' || in_array($loan->status, ['paid', 'written_off'], true)) {
+            return back()->with('error', 'Only an active, disbursed loan with a remaining balance can be topped up.');
+        }
+
+        $outstanding = $loan->principalInterestDue() - $loan->payments()->sum('amount_paid');
+
+        return view('loan-manager.loans.top-up', [
+            'loan' => $loan,
+            'outstandingBalance' => max(0, round($outstanding, 2)),
+        ]);
+    }
+
+    /**
+     * Create the replacement loan application. Like any other loan it still
+     * goes through the normal approve → disburse pipeline; the actual
+     * netting-off against the old loan happens in disburseTopUp() at
+     * disbursement time (see disburse()), not here, since the old balance
+     * can keep moving between now and whenever it's actually approved.
+     */
+    public function storeTopUp(Request $request, Loan $loan)
+    {
+        if (Auth::user()->loanManager->id !== $loan->loan_manager_id) { abort(403); }
+        $loanManagerId = $loan->loan_manager_id;
+
+        if ($loan->approval_status !== 'disbursed' || in_array($loan->status, ['paid', 'written_off'], true)) {
+            return back()->with('error', 'Only an active, disbursed loan with a remaining balance can be topped up.');
+        }
+
+        $validated = $request->validate([
+            'principal_amount' => 'required|numeric|min:100',
+            'processing_fee' => 'nullable|numeric|min:0',
+            'interest_rate' => 'required|numeric|min:0|max:100',
+            'interest_method' => 'nullable|string|in:flat,reducing_balance',
+            'term' => 'required|integer|min:1',
+            'repayment_frequency' => 'required|string|in:Daily,Weekly,Monthly',
+            'start_date' => 'required|date',
+        ]);
+
+        $outstanding = $loan->principalInterestDue() - $loan->payments()->sum('amount_paid');
+
+        if ($validated['principal_amount'] < $outstanding) {
+            return back()->with('error', 'The new principal (' . number_format($validated['principal_amount']) . ') must be at least the old loan\'s outstanding balance (' . number_format($outstanding) . ') — a top-up can\'t hand out less than what\'s already owed.')->withInput();
+        }
+
+        $newLoan = DB::transaction(function () use ($validated, $loan, $loanManagerId) {
+            $loanCount = Loan::where('loan_manager_id', $loanManagerId)->count();
+
+            return Loan::create([
+                'client_id' => $loan->client_id,
+                'client_group_id' => $loan->client_group_id,
+                'loan_manager_id' => $loanManagerId,
+                'branch_id' => $loan->branch_id,
+                'replaces_loan_id' => $loan->id,
+                'mfi_loan_product_id' => $loan->mfi_loan_product_id,
+                'principal_amount' => $validated['principal_amount'],
+                'processing_fee' => $validated['processing_fee'] ?? 0,
+                'interest_rate' => $validated['interest_rate'],
+                'interest_method' => $validated['interest_method'] ?? 'flat',
+                'term' => $validated['term'],
+                'repayment_frequency' => $validated['repayment_frequency'],
+                'start_date' => $validated['start_date'],
+                'status' => 'pending',
+                'approval_status' => 'pending',
+                'reference_id' => 'LN-' . str_pad($loanCount + 1, 4, '0', STR_PAD_LEFT),
+            ]);
+        });
+
+        return redirect()->route('loans.show', $newLoan->id)->with('success', 'Top-up application created (Ref: ' . $newLoan->reference_id . '). It still needs approval and disbursement like any other loan — the old loan\'s balance will be settled automatically when this one is disbursed.');
     }
 
     /**
@@ -475,6 +569,10 @@ class LoanController extends Controller implements HasMiddleware
 
         if ($loan->payments()->exists()) {
             return back()->with('error', 'This loan already has repayments recorded against it — reversing disbursement is no longer safe. Use Write Off instead if it needs to come off the books.');
+        }
+
+        if ($loan->replaces_loan_id) {
+            return back()->with('error', 'This loan was disbursed as a top-up of Loan #' . $loan->replaces_loan_id . ', which was already settled and closed as part of that disbursement. Reversing it here won\'t automatically reopen the old loan — undo that manually first if you really need to unwind this.');
         }
 
         DB::transaction(function () use ($loan) {
@@ -774,6 +872,187 @@ class LoanController extends Controller implements HasMiddleware
     }
 
     /**
+     * Disbursement for a loan created via topUp()/storeTopUp(): instead of
+     * paying the full new principal out in cash, the old loan's remaining
+     * principal + interest is netted off first, and only the difference
+     * (if any) actually goes out as cash. The old loan is settled with a
+     * real Payment row (method "Loan Top-Up") so its own history/receipts
+     * show exactly how it was closed, its collateral lien (if any) is
+     * released, and it's marked paid.
+     *
+     * Journal (source 'loan_topup_disbursement'):
+     *   Dr Loan Portfolio      new principal (full)
+     *   Cr Loan Portfolio      old loan's outstanding principal (removed from the books)
+     *   Cr Interest Income     old loan's outstanding interest (recognized as earned via the roll-over)
+     *   Cr Cash                whatever's left over, actually handed to the client
+     *
+     * Only principal + interest are netted — any outstanding penalties or
+     * processing fee on the old loan are NOT auto-settled here and should
+     * still be collected/written off separately.
+     */
+    private function disburseTopUp(Loan $loan, int $managerId)
+    {
+        $oldLoan = Loan::with('client')->lockForUpdate()->find($loan->replaces_loan_id);
+
+        if (!$oldLoan || $oldLoan->loan_manager_id !== $managerId) {
+            return back()->with('error', 'The loan this was supposed to top up no longer exists.');
+        }
+
+        if (in_array($oldLoan->status, ['paid', 'written_off'], true)) {
+            return back()->with('error', 'The old loan (#' . $oldLoan->id . ') has already been closed — this top-up can no longer be disbursed as a top-up. Reverse it back to "approved" and re-check, or disburse it as an ordinary loan instead.');
+        }
+
+        $principalPaid = (float) $oldLoan->payments()->sum('principal_paid');
+        $interestPaid = (float) $oldLoan->payments()->sum('interest_paid');
+
+        $principalOutstanding = max(0, round($oldLoan->principal_amount - $principalPaid, 2));
+        $interestOutstanding = max(0, round($oldLoan->totalInterestDue() - $interestPaid, 2));
+        $settlement = round($principalOutstanding + $interestOutstanding, 2);
+        $netCashOut = round($loan->principal_amount - $settlement, 2);
+
+        if ($netCashOut < -0.01) {
+            return back()->with('error', 'The old loan\'s outstanding balance (' . number_format($settlement) . ') is now more than this top-up\'s principal (' . number_format($loan->principal_amount) . ') — someone likely made a payment on the old loan since this was applied for. Reject this application and start a new top-up for the current balance.');
+        }
+
+        DB::transaction(function () use ($loan, $oldLoan, $managerId, $principalOutstanding, $interestOutstanding, $settlement, $netCashOut) {
+            $entry = $this->postTopUpDisbursementJournalEntry($loan, $oldLoan, $managerId, $principalOutstanding, $interestOutstanding, $netCashOut);
+
+            if ($settlement > 0.01) {
+                $settlementPayment = Payment::create([
+                    'loan_id' => $oldLoan->id,
+                    'payment_date' => now()->toDateString(),
+                    'amount_paid' => $settlement,
+                    'principal_paid' => $principalOutstanding,
+                    'interest_paid' => $interestOutstanding,
+                    'payment_method' => 'Loan Top-Up',
+                    'receipt_number' => 'TOPUP-' . $loan->id,
+                    'notes' => 'Settled via top-up into loan #' . $loan->id . ' (Ref: ' . $loan->reference_id . ')',
+                    'journal_entry_id' => $entry?->id,
+                ]);
+            }
+
+            if ($oldLoan->collateral_locked > 0) {
+                $savingsAccount = MfiAccount::where('loan_manager_id', $managerId)
+                    ->where('client_id', $oldLoan->client_id)
+                    ->where('account_type', 'savings')
+                    ->where('status', 'active')
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($savingsAccount) {
+                    $release = min($oldLoan->collateral_locked, $savingsAccount->lien_amount);
+                    $savingsAccount->decrement('lien_amount', $release);
+                }
+
+                $oldLoan->collateral_locked = 0;
+            }
+
+            $oldLoan->status = 'paid';
+            $oldLoan->save();
+
+            $loan->update([
+                'approval_status' => 'disbursed',
+                'status' => 'active',
+                'disbursement_journal_entry_id' => $entry?->id,
+            ]);
+
+            RepaymentScheduleGenerator::generate($loan);
+        });
+
+        NotificationService::notify(
+            $managerId,
+            'loan_disbursed',
+            'Loan #' . $loan->id . ' disbursed (top-up)',
+            ($loan->client?->name ?? 'Client') . '\'s loan #' . $oldLoan->id . ' was topped up into new loan #' . $loan->id . '. ' .
+                ($netCashOut > 0.01 ? number_format($netCashOut) . ' paid out in cash.' : 'No cash paid out — fully absorbed by the old balance.'),
+            $loan->client_id,
+            route('loans.show', $loan->id),
+            'Your loan #' . $oldLoan->id . ' has been topped up into new loan #' . $loan->id . ' (' . \App\Models\LoanManager::getCurrency() . ' ' . number_format($loan->principal_amount) . '). ' .
+                ($netCashOut > 0.01 ? \App\Models\LoanManager::getCurrency() . ' ' . number_format($netCashOut) . ' has been paid out to you.' : 'The old balance fully covered the new amount, so no cash was paid out.')
+        );
+
+        return redirect()->route('loans.show', $loan->id)->with(
+            'success',
+            'Top-up disbursed. Loan #' . $oldLoan->id . ' settled (' . number_format($settlement) . ') and closed. ' .
+                ($netCashOut > 0.01 ? number_format($netCashOut) . ' paid out to the client.' : 'Nothing left to pay out — the new principal only covered the old balance.')
+        );
+    }
+
+    private function postTopUpDisbursementJournalEntry(Loan $newLoan, Loan $oldLoan, int $managerId, float $principalOutstanding, float $interestOutstanding, float $netCashOut): ?JournalEntry
+    {
+        $loanPortfolio = ChartOfAccount::where('loan_manager_id', $managerId)->where('code', '1100')->where('is_active', true)->first();
+        $cash = ChartOfAccount::where('loan_manager_id', $managerId)->where('code', '1000')->where('is_active', true)->first();
+        $interestIncome = ChartOfAccount::where('loan_manager_id', $managerId)->where('code', '4000')->where('is_active', true)->first();
+
+        if (!$loanPortfolio || !$cash) {
+            return null;
+        }
+
+        $entry = JournalEntry::create([
+            'loan_manager_id' => $managerId,
+            'entry_date' => now()->toDateString(),
+            'reference_no' => $newLoan->reference_id,
+            'narration' => 'Loan top-up — loan #' . $oldLoan->id . ' rolled into #' . $newLoan->id . ' (' . ($newLoan->client->name ?? 'client #' . $newLoan->client_id) . ')',
+            'created_by' => Auth::id(),
+            'source' => 'loan_topup_disbursement',
+        ]);
+
+        JournalEntryLine::create([
+            'journal_entry_id' => $entry->id,
+            'chart_of_account_id' => $loanPortfolio->id,
+            'debit' => $newLoan->principal_amount,
+            'credit' => 0,
+            'description' => 'New principal disbursed (loan #' . $newLoan->id . ')',
+        ]);
+
+        // Track credits as they're posted so the entry always balances
+        // exactly against the debit above, even if the tenant hasn't set
+        // up a 4000 Interest Income account — in that case the interest
+        // portion simply falls through into the cash line below rather
+        // than being silently dropped (which would leave this entry
+        // permanently out of balance).
+        $creditedSoFar = 0.0;
+
+        if ($principalOutstanding > 0.01) {
+            JournalEntryLine::create([
+                'journal_entry_id' => $entry->id,
+                'chart_of_account_id' => $loanPortfolio->id,
+                'debit' => 0,
+                'credit' => $principalOutstanding,
+                'description' => 'Old loan #' . $oldLoan->id . ' principal settled via top-up',
+            ]);
+            $creditedSoFar += $principalOutstanding;
+        }
+
+        if ($interestOutstanding > 0.01 && $interestIncome) {
+            JournalEntryLine::create([
+                'journal_entry_id' => $entry->id,
+                'chart_of_account_id' => $interestIncome->id,
+                'debit' => 0,
+                'credit' => $interestOutstanding,
+                'description' => 'Old loan #' . $oldLoan->id . ' interest settled via top-up',
+            ]);
+            $creditedSoFar += $interestOutstanding;
+        }
+
+        $cashCredit = round($newLoan->principal_amount - $creditedSoFar, 2);
+
+        if ($cashCredit > 0.01) {
+            JournalEntryLine::create([
+                'journal_entry_id' => $entry->id,
+                'chart_of_account_id' => $cash->id,
+                'debit' => 0,
+                'credit' => $cashCredit,
+                'description' => $cashCredit > $netCashOut + 0.01
+                    ? 'Net cash out to client (includes old interest — no Interest Income account configured)'
+                    : 'Net cash out to client',
+            ]);
+        }
+
+        return $entry;
+    }
+
+    /**
      * Show loan repayment calculator.
      */
     public function showCalculator(Request $request)
@@ -785,47 +1064,81 @@ class LoanController extends Controller implements HasMiddleware
         
         $principal = $request->input('principal_amount', 1000000);
         $interestRate = $request->input('interest_rate', 10);
+        $interestMethod = $request->input('interest_method', 'flat');
         $term = $request->input('term', 12);
         $frequency = $request->input('repayment_frequency', 'Monthly');
 
         if ($request->has('calculate')) {
             $calculationPerformed = true;
-            
+
             if ($principal > 0 && $term > 0) {
-                $totalInterest = $principal * ($interestRate / 100);
-                $totalRepayable = $principal + $totalInterest;
-                
-                $paymentPerPeriod = $totalRepayable / $term;
-                $principalComponent = $principal / $term;
-                $interestComponent = $totalInterest / $term;
-                
-                $balance = $totalRepayable;
+                // A throwaway, unsaved Loan so the calculator shares exactly
+                // the same math as real loans (totalInterestDue()/
+                // amortizationSchedule()) instead of a third copy of it.
+                $previewLoan = new Loan([
+                    'principal_amount' => $principal,
+                    'interest_rate' => $interestRate,
+                    'interest_method' => $interestMethod,
+                    'term' => $term,
+                ]);
+
+                $totalInterest = $previewLoan->totalInterestDue();
+                $totalRepayable = $previewLoan->principalInterestDue();
+
                 $startDate = Carbon::today();
 
-                for ($i = 1; $i <= $term; $i++) {
-                    $balance -= $paymentPerPeriod;
-                    $dueDate = $startDate->copy();
-                    
-                    switch ($frequency) {
-                        case 'Daily':  $dueDate->addDays($i); break;
-                        case 'Weekly': $dueDate->addWeeks($i); break;
-                        default: $dueDate->addMonths($i); break;
+                if ($interestMethod === 'reducing_balance') {
+                    $balance = $totalRepayable;
+
+                    foreach ($previewLoan->amortizationSchedule() as $period) {
+                        $dueDate = $startDate->copy();
+                        switch ($frequency) {
+                            case 'Daily':  $dueDate->addDays($period['installment']); break;
+                            case 'Weekly': $dueDate->addWeeks($period['installment']); break;
+                            default: $dueDate->addMonths($period['installment']); break;
+                        }
+
+                        $schedule[] = [
+                            'period' => $period['installment'],
+                            'due_date' => $dueDate->toDateString(),
+                            'payment_amount' => $period['principal'] + $period['interest'],
+                            'principal' => $period['principal'],
+                            'interest' => $period['interest'],
+                            'balance' => $period['balance'],
+                        ];
                     }
-                    
-                    $schedule[] = [
-                        'period' => $i, 
-                        'due_date' => $dueDate->toDateString(), 
-                        'payment_amount' => $paymentPerPeriod, 
-                        'principal' => $principalComponent, 
-                        'interest' => $interestComponent, 
-                        'balance' => ($i == $term) ? 0 : $balance
-                    ];
+                } else {
+                    $paymentPerPeriod = $totalRepayable / $term;
+                    $principalComponent = $principal / $term;
+                    $interestComponent = $totalInterest / $term;
+
+                    $balance = $totalRepayable;
+
+                    for ($i = 1; $i <= $term; $i++) {
+                        $balance -= $paymentPerPeriod;
+                        $dueDate = $startDate->copy();
+
+                        switch ($frequency) {
+                            case 'Daily':  $dueDate->addDays($i); break;
+                            case 'Weekly': $dueDate->addWeeks($i); break;
+                            default: $dueDate->addMonths($i); break;
+                        }
+
+                        $schedule[] = [
+                            'period' => $i,
+                            'due_date' => $dueDate->toDateString(),
+                            'payment_amount' => $paymentPerPeriod,
+                            'principal' => $principalComponent,
+                            'interest' => $interestComponent,
+                            'balance' => ($i == $term) ? 0 : $balance
+                        ];
+                    }
                 }
             }
         }
 
-        return view('loan-manager.loans.calculator', compact( 
-            'schedule', 'principal', 'interestRate', 'term', 'frequency', 
+        return view('loan-manager.loans.calculator', compact(
+            'schedule', 'principal', 'interestRate', 'interestMethod', 'term', 'frequency',
             'calculationPerformed', 'totalRepayable', 'totalInterest'
         ));
     }

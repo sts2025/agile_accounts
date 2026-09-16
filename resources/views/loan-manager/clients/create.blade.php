@@ -116,6 +116,17 @@
                                 <option value="none" {{ old('preferred_notification_channel') == 'none' ? 'selected' : '' }}>None</option>
                             </select>
                         </div>
+                        @if(isset($branches) && $branches->isNotEmpty())
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold text-muted small">Branch <span class="text-secondary fw-normal">(Optional)</span></label>
+                            <select name="branch_id" class="form-select">
+                                <option value="">-- Not assigned --</option>
+                                @foreach($branches as $branch)
+                                    <option value="{{ $branch->id }}" {{ old('branch_id') == $branch->id ? 'selected' : '' }}>{{ $branch->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        @endif
                     </div>
                 </div>
 

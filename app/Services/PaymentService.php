@@ -165,7 +165,7 @@ class PaymentService
             // Uses the same lien-release logic as LoanController's manual
             // status toggle, so a loan paid off through the normal
             // repayment screen also frees up any locked savings collateral.
-            $totalDue = $loan->principal_amount + ($loan->principal_amount * ($loan->interest_rate / 100));
+            $totalDue = $loan->principalInterestDue();
             $paidSoFar = $loan->payments()->sum('amount_paid');
 
             $justPaidOff = false;
@@ -182,6 +182,8 @@ class PaymentService
         });
 
         $loan = $result['loan'];
+        $currency = \App\Models\LoanManager::find($managerId)?->currency_symbol ?? 'UGX';
+        $newBalance = max(0, round($loan->principalInterestDue() - $loan->payments()->sum('amount_paid'), 2));
 
         NotificationService::notify(
             $managerId,
@@ -189,7 +191,8 @@ class PaymentService
             'Payment received on loan #' . $loan->id,
             ($loan->client?->name ?? 'Client') . ' paid ' . number_format($result['payment']->amount_paid) . ' towards loan #' . $loan->id . '.',
             $loan->client_id,
-            route('loans.show', $loan->id)
+            route('loans.show', $loan->id),
+            'We received your payment of ' . $currency . ' ' . number_format($result['payment']->amount_paid) . ' on loan #' . $loan->id . '. Remaining balance: ' . $currency . ' ' . number_format($newBalance) . '.'
         );
 
         if ($result['just_paid_off']) {
@@ -199,7 +202,8 @@ class PaymentService
                 'Loan #' . $loan->id . ' fully paid off',
                 ($loan->client?->name ?? 'Client') . '\'s loan has been fully repaid.',
                 $loan->client_id,
-                route('loans.show', $loan->id)
+                route('loans.show', $loan->id),
+                'Congratulations! Your loan #' . $loan->id . ' has been fully repaid. Thank you for banking with us.'
             );
         }
 

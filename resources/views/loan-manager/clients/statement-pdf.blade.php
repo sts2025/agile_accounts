@@ -79,10 +79,7 @@
     </div>
 
     @php
-        // $client->loanManager is belongsTo(User::class) (the tenant owner's
-        // User row, not the LoanManager profile) — hop one further via that
-        // User's own ->loanManager (hasOne LoanManager) to reach the profile.
-        $manager = Auth::user()->getCompany() ?? Auth::user()->loanManager ?? optional($client->loanManager)->loanManager;
+        $manager = Auth::user()->getCompany() ?? Auth::user()->loanManager ?? $client->loanManager;
         $currency = $manager->currency_symbol ?? 'UGX';
 
         $companyName = !empty($manager->company_name) ? $manager->company_name : (optional($manager->user)->name ?? 'STREAMLINE TECH SOLUTION');

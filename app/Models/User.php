@@ -22,6 +22,7 @@ class User extends Authenticatable
         'user_type',
         'role',             // Required for Cashier
         'loan_manager_id',  // Required for Cashier
+        'branch_id',        // Optional: which branch/office this staff member works out of
     ];
 
     protected $hidden = [
@@ -85,6 +86,11 @@ class User extends Authenticatable
     public function employer(): BelongsTo
     {
         return $this->belongsTo(LoanManager::class, 'loan_manager_id');
+    }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     // --- CRITICAL HELPER ---

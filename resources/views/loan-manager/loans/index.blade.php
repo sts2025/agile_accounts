@@ -64,10 +64,10 @@
                                 $currency = $currency_symbol ?? 'UGX';
                                 
                                 // 1. Interest Amount
-                                $interest = $loan->principal_amount * ($loan->interest_rate / 100);
-                                
+                                $interest = $loan->totalInterestDue();
+
                                 // 2. Total Due
-                                $totalDue = $loan->principal_amount + $interest;
+                                $totalDue = $loan->principalInterestDue();
                                 
                                 // 3. Paid (Sum of payments)
                                 $paid = $loan->payments->sum('amount_paid');
